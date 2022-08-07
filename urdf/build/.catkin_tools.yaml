@@ -1,0 +1,6 @@
+devel_space: /home/hanikevi/gitlab-ipk/full-state-estimator/urdf/devel
+install: false
+install_space: /home/hanikevi/gitlab-ipk/full-state-estimator/urdf/install
+profile: default
+source_space: /home/hanikevi/gitlab-ipk/full-state-estimator/urdf/src
+workspace: /home/hanikevi/gitlab-ipk/full-state-estimator/urdf

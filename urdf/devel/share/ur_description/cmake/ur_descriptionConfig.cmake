@@ -1,0 +1,1 @@
+/home/hanikevi/gitlab-ipk/full-state-estimator/urdf/devel/.private/ur_description/share/ur_description/cmake/ur_descriptionConfig.cmake
