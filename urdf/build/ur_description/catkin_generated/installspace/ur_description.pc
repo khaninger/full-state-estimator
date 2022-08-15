@@ -1,4 +1,4 @@
-prefix=/home/hanikevi/gitlab-ipk/full-state-estimator/urdf/install
+prefix=/home/hanikevi/full-state-estimator/urdf/install
 
 Name: ur_description
 Description: Description of ur_description

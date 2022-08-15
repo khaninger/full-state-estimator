@@ -1,1 +1,8 @@
-/home/hanikevi/gitlab-ipk/full-state-estimator/urdf/devel/.private/ur_description/lib/pkgconfig/ur_description.pc
+prefix=/home/hanikevi/full-state-estimator/urdf/devel
+
+Name: ur_description
+Description: Description of ur_description
+Version: 1.2.5
+Cflags: 
+Libs: -L${prefix}/lib 
+Requires: 

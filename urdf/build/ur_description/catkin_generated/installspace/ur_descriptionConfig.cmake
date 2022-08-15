@@ -67,14 +67,14 @@ set(ur_description_CONFIG_INCLUDED TRUE)
 
 # set variables for source/devel/install prefixes
 if("FALSE" STREQUAL "TRUE")
-  set(ur_description_SOURCE_PREFIX /home/hanikevi/gitlab-ipk/full-state-estimator/urdf/src/ur_description)
-  set(ur_description_DEVEL_PREFIX /home/hanikevi/gitlab-ipk/full-state-estimator/urdf/devel/.private/ur_description)
+  set(ur_description_SOURCE_PREFIX /home/hanikevi/full-state-estimator/urdf/src/ur_description)
+  set(ur_description_DEVEL_PREFIX /home/hanikevi/full-state-estimator/urdf/devel)
   set(ur_description_INSTALL_PREFIX "")
   set(ur_description_PREFIX ${ur_description_DEVEL_PREFIX})
 else()
   set(ur_description_SOURCE_PREFIX "")
   set(ur_description_DEVEL_PREFIX "")
-  set(ur_description_INSTALL_PREFIX /home/hanikevi/gitlab-ipk/full-state-estimator/urdf/install)
+  set(ur_description_INSTALL_PREFIX /home/hanikevi/full-state-estimator/urdf/install)
   set(ur_description_PREFIX ${ur_description_INSTALL_PREFIX})
 endif()
 
@@ -154,7 +154,7 @@ foreach(library ${libraries})
     set(lib_path "")
     set(lib "${library}-NOTFOUND")
     # since the path where the library is found is returned we have to iterate over the paths manually
-    foreach(path /home/hanikevi/gitlab-ipk/full-state-estimator/urdf/install/lib;/home/hanikevi/gitlab-ipk/full-state-estimator/urdf/devel/lib;/opt/ros/melodic/lib)
+    foreach(path /home/hanikevi/full-state-estimator/urdf/install/lib;/home/hanikevi/full-state-estimator/urdf/devel/lib;/opt/ros/noetic/lib)
       find_library(lib ${library}
         PATHS ${path}
         NO_DEFAULT_PATH NO_CMAKE_FIND_ROOT_PATH)
@@ -211,7 +211,7 @@ foreach(depend ${depends})
   _unpack_libraries_with_build_configuration(ur_description_LIBRARIES ${ur_description_LIBRARIES})
 
   _list_append_unique(ur_description_LIBRARY_DIRS ${${ur_description_dep}_LIBRARY_DIRS})
-  list(APPEND ur_description_EXPORTED_TARGETS ${${ur_description_dep}_EXPORTED_TARGETS})
+  _list_append_deduplicate(ur_description_EXPORTED_TARGETS ${${ur_description_dep}_EXPORTED_TARGETS})
 endforeach()
 
 set(pkg_cfg_extras "")
