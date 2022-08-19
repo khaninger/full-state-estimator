@@ -51,8 +51,8 @@ BEGIN
   $APPL_OPTIONS_INFO_MAP[3] := 0
   $APPL_OPTIONS_INFO_MAP[4] := 0
   $APPL_OPTIONS_INFO_MAP[5] := 0
-  $APPL_OPTIONS_INFO_MAP[6] := 0
-  $APPL_OPTIONS_INFO_MAP[7] := 0
+  $APPL_OPTIONS_INFO_MAP[6] := 0 
+ $APPL_OPTIONS_INFO_MAP[7] := 0
   $APPL_OPTIONS_INFO_MAP[8] := 0
   $APPL_OPTIONS_INFO_MAP[9] := 0
   $APPL_OPTIONS_INFO_MAP[10] := 0
@@ -305,17 +305,17 @@ BEGIN
   $ARM_DATA[1].AX_INF[9] := 0
   $ARM_DATA[1].AX_INF[10] := 0
   -- Axes lengths
-  $ARM_DATA[1].AX_LEN[1] := 430
-  $ARM_DATA[1].AX_LEN[2] := 590
-  $ARM_DATA[1].AX_LEN[3] := 684
+  $ARM_DATA[1].AX_LEN[1] := 430 -- matches ground to height of ax2
+  $ARM_DATA[1].AX_LEN[2] := 590 -- distance ax2 ax3
+  $ARM_DATA[1].AX_LEN[3] := 684 -- distance ax3 ax5
   $ARM_DATA[1].AX_LEN[4] := 0
-  $ARM_DATA[1].AX_LEN[5] := 100
+  $ARM_DATA[1].AX_LEN[5] := 100 -- distance ax5 flange
   $ARM_DATA[1].AX_LEN[6] := 0
   -- Axes offsets
   $ARM_DATA[1].AX_OFST[1] := 0
-  $ARM_DATA[1].AX_OFST[2] := 150
+  $ARM_DATA[1].AX_OFST[2] := 150 -- forward position of ax2 vs ax1
   $ARM_DATA[1].AX_OFST[3] := 0
-  $ARM_DATA[1].AX_OFST[4] := 130
+  $ARM_DATA[1].AX_OFST[4] := 130 -- vertical shift of ax5 vs ax3
   $ARM_DATA[1].AX_OFST[5] := 0
   $ARM_DATA[1].AX_OFST[6] := 0
   $ARM_DATA[1].AX_OFST[7] := 0
@@ -795,13 +795,14 @@ BEGIN
   $BREG[48] := OFF
   $BREG[49] := OFF
   $BREG[50] := OFF
+
   -- Reserved variable
   $ARM_DATA[1].CAD_COG[1,1] := -0.118105 -- 0
   $ARM_DATA[1].CAD_COG[1,2] := 0.069009 -- 0
   $ARM_DATA[1].CAD_COG[1,3] := 0.049382 -- 0
-  $ARM_DATA[1].CAD_COG[2,1] := -0.316854 -- 0
+  $ARM_DATA[1].CAD_COG[2,1] := -0.316854 -- x axis
   $ARM_DATA[1].CAD_COG[2,2] := 0.000596 -- 0
-  $ARM_DATA[1].CAD_COG[2,3] := -0.13391 -- 0
+  $ARM_DATA[1].CAD_COG[2,3] := -0.13391 -- z axis (along motor axis)
   $ARM_DATA[1].CAD_COG[3,1] := -0.067066 -- 0
   $ARM_DATA[1].CAD_COG[3,2] := -0.012527 -- 0
   $ARM_DATA[1].CAD_COG[3,3] := -0.01986 -- 0
@@ -845,7 +846,7 @@ BEGIN
   $ARM_DATA[1].CAD_COG[16,2] := 0 -- 0
   $ARM_DATA[1].CAD_COG[16,3] := 0 -- 0
   -- Reserved variable
-  $ARM_DATA[1].CAD_INERTIA[1,1] := 1.40593 -- 0
+  $ARM_DATA[1].CAD_INERTIA[1,1] := 1.40593 --  about COG? 
   $ARM_DATA[1].CAD_INERTIA[1,2] := 0.16236 -- 0
   $ARM_DATA[1].CAD_INERTIA[1,3] := 0.337009 -- 0
   $ARM_DATA[1].CAD_INERTIA[1,4] := 1.82497 -- 0
@@ -942,7 +943,7 @@ BEGIN
   $ARM_DATA[1].CAD_INERTIA[16,5] := 0 -- 0
   $ARM_DATA[1].CAD_INERTIA[16,6] := 0 -- 0
   -- Reserved variable
-  $ARM_DATA[1].CAD_MASS[1] := 75.831 -- 0
+  $ARM_DATA[1].CAD_MASS[1] := 75.831 -- could be realistic, has two motors
   $ARM_DATA[1].CAD_MASS[2] := 22.4953 -- 0
   $ARM_DATA[1].CAD_MASS[3] := 23.396 -- 0
   $ARM_DATA[1].CAD_MASS[4] := 13.0332 -- 0
