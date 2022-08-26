@@ -22,21 +22,26 @@ class ros_observer():
         self.tau_err = None  # torque error
         self.F = None        # EE force
         self.state_init= False
-        
+
         self.joint_sub = rospy.Subscriber(joint_topic, JointState,
                                            self.joint_callback, queue_size=1)
         self.force_sub = rospy.Subscriber(force_topic, JointState,
                                           self.force_callback, queue_size=1)
         self.joint_pub = rospy.Publisher('obs_joint_state',
                                          JointState, queue_size=1)
-   
-        urdf = rospy.get_param('robot_description')
-        rob = robot(urdf)
 
-        cov_init = rospy.get_param('cov_init', [1.]*rob.nx)
-        cov_init = np.diag(cov_init)
-        
-        self.observer = ekf(rob, self.q, cov_init)
+        self.init_rosparams()
+
+        rob = robot(self.urdf)
+        self.observer = ekf(rob, self.q, self.cov_init,
+                            self.proc_noise, self.meas_nosie)
+
+    def init_rosparams(self):
+        self.urdf = rospy.get_param('robot_description')
+        self.proc_noise = rospy.get_param('proc_noise', [0.01]*rob.nx)
+        self.meas_nosie = rospy.get_param('meas_noise', [0.1]*rob.ny)
+        self.cov_init = rospy.get_param('cov_init', [1.]*rob.nx)
+        self.cov_init = np.diag(cov_init)
 
     def joint_callback(self, msg):
         """ To be called when the joint_state topic is published with joint position and torques """
@@ -53,7 +58,7 @@ class ros_observer():
             self.F = msg.effort[:6]
         except:
             print("Error loading ROS message in force_callback")
-            
+
     def observer_update(self):
         if self.q and self.tau_err and self.F:
             q, dq, tau_ext = self.observer.step(q = self.q,
