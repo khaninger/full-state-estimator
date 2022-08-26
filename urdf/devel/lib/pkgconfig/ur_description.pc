@@ -1,8 +1,0 @@
-prefix=/home/ipk/full-state-estimator/urdf/devel
-
-Name: ur_description
-Description: Description of ur_description
-Version: 1.2.5
-Cflags: 
-Libs: -L/home/ipk/full-state-estimator/urdf/devel/lib 
-Requires: 

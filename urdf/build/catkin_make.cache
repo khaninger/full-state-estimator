@@ -1,2 +1,0 @@
-racer_description:ur_description
--DCATKIN_DEVEL_PREFIX=/home/ipk/full-state-estimator/urdf/devel -DCMAKE_INSTALL_PREFIX=/home/ipk/full-state-estimator/urdf/install -G Unix Makefiles
