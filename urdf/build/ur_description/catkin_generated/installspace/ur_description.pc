@@ -1,8 +1,8 @@
-prefix=/home/hanikevi/full-state-estimator/urdf/install
+prefix=/home/ipk/full-state-estimator/urdf/install
 
 Name: ur_description
 Description: Description of ur_description
 Version: 1.2.5
 Cflags: 
-Libs: -L${prefix}/lib 
+Libs: -L/home/ipk/full-state-estimator/urdf/install/lib 
 Requires: 

@@ -8,6 +8,7 @@
       <inertia ixx="0.05293" ixy="1.9878e-05" ixz="-0.0043586" iyy="0.060873" iyz="5.4713e-06" izz="0.042672"/>
     </inertial>
     <visual>
+     
       <geometry>
         <mesh filename="package://racer_description/mesh/base_link.STL"/>
       </geometry>
@@ -156,12 +157,12 @@
       </geometry>
     </collision>
   </link>
-  <joint name="fixed" type="prismatic">
-    <origin rpy="0.0 3.1415926536 3.1415926536" xyz="0 0 2.37"/>
+  <joint name="fixed" type="fixed">
+    <origin rpy="0.0 0.0 0.0" xyz="0 0 0"/>
     <parent link="world"/>
     <child link="base_link"/>
-    <axis xyz="0 -1 0"/>
-    <limit effort="10000.0" lower="-1.7" upper="1.7" velocity="6.98131700798"/>
+    <axis xyz="0 0 0"/>
+    <limit effort="0.0" lower="0" upper="0" velocity="0"/>
   </joint>
   <joint name="head_swivel" type="revolute">
     <origin rpy="0 0 0" xyz="0.0 0.0 0.1895"/>

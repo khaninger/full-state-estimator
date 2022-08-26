@@ -1,8 +1,8 @@
-# Install script for directory: /home/hanikevi/full-state-estimator/urdf/src/racer_description
+# Install script for directory: /home/ipk/full-state-estimator/urdf/src/racer_description
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
-  set(CMAKE_INSTALL_PREFIX "/home/hanikevi/full-state-estimator/urdf/install")
+  set(CMAKE_INSTALL_PREFIX "/home/ipk/full-state-estimator/urdf/install")
 endif()
 string(REGEX REPLACE "/$" "" CMAKE_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}")
 
@@ -46,7 +46,7 @@ if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_
   if(CMAKE_ERROR_ON_ABSOLUTE_INSTALL_DESTINATION)
     message(FATAL_ERROR "ABSOLUTE path INSTALL DESTINATION forbidden (by caller): ${CMAKE_ABSOLUTE_DESTINATION_FILES}")
   endif()
-file(INSTALL DESTINATION "/config" TYPE DIRECTORY FILES "/home/hanikevi/full-state-estimator/urdf/src/racer_description/config/")
+file(INSTALL DESTINATION "/config" TYPE DIRECTORY FILES "/home/ipk/full-state-estimator/urdf/src/racer_description/config/")
 endif()
 
 if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_COMPONENT)
@@ -58,7 +58,7 @@ if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_
   if(CMAKE_ERROR_ON_ABSOLUTE_INSTALL_DESTINATION)
     message(FATAL_ERROR "ABSOLUTE path INSTALL DESTINATION forbidden (by caller): ${CMAKE_ABSOLUTE_DESTINATION_FILES}")
   endif()
-file(INSTALL DESTINATION "/launch" TYPE DIRECTORY FILES "/home/hanikevi/full-state-estimator/urdf/src/racer_description/launch/")
+file(INSTALL DESTINATION "/launch" TYPE DIRECTORY FILES "/home/ipk/full-state-estimator/urdf/src/racer_description/launch/")
 endif()
 
 if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_COMPONENT)
@@ -70,7 +70,7 @@ if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_
   if(CMAKE_ERROR_ON_ABSOLUTE_INSTALL_DESTINATION)
     message(FATAL_ERROR "ABSOLUTE path INSTALL DESTINATION forbidden (by caller): ${CMAKE_ABSOLUTE_DESTINATION_FILES}")
   endif()
-file(INSTALL DESTINATION "/mesh" TYPE DIRECTORY FILES "/home/hanikevi/full-state-estimator/urdf/src/racer_description/mesh/")
+file(INSTALL DESTINATION "/mesh" TYPE DIRECTORY FILES "/home/ipk/full-state-estimator/urdf/src/racer_description/mesh/")
 endif()
 
 if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_COMPONENT)
@@ -82,6 +82,6 @@ if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_
   if(CMAKE_ERROR_ON_ABSOLUTE_INSTALL_DESTINATION)
     message(FATAL_ERROR "ABSOLUTE path INSTALL DESTINATION forbidden (by caller): ${CMAKE_ABSOLUTE_DESTINATION_FILES}")
   endif()
-file(INSTALL DESTINATION "/urdf" TYPE DIRECTORY FILES "/home/hanikevi/full-state-estimator/urdf/src/racer_description/urdf/")
+file(INSTALL DESTINATION "/urdf" TYPE DIRECTORY FILES "/home/ipk/full-state-estimator/urdf/src/racer_description/urdf/")
 endif()
 

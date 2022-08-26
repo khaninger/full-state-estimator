@@ -49,6 +49,8 @@ class robot():
         """ Makes the linearized dynamic matrix A for semi-explicit integrator
             h: time step in seconds
         """
+        q = ca.SX.sym('q', self.nq)
+        dq = ca.SX.sym('dq', self.nq)
         tau_err = ca.SX.sym('tau_err', self.nq)
 
         ddq = self.get_ddq(q, dq, tau_err)

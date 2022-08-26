@@ -11,3 +11,6 @@ Python installs, should be available in pip3
 - casadi-kin-dyn
 
 
+# Starting
+source urdf/devel/setup.bash
+roslaunch racer_description racer.launch
