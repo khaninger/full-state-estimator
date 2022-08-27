@@ -7,12 +7,13 @@ class robot():
     """ This class handles the loading of robot dynamics/kinematics, the discretization/integration, and linearization
         Somewhat humerously, this class is stateless (e.g. the actual system state shouldn't be stored here).
     """
-    def __init__(self, urdf):
+    def __init__(self, urdf, h):
         self.load_kin_dyn(urdf)
-
-        self.build_fwd_kin()
-
         self.env_dyns = []
+        self.build_fwd_kin()
+        self.build_disc_dyn(h)
+        self.build_output()
+        
 
     def add_env_dyn(self, env_dyn):
         """ Append the env_dyn to the robot """
@@ -44,6 +45,7 @@ class robot():
         self.d_fwd_kin = ca.Function('dx', [self.q, self.dq], [J@self.dq], ['q', 'dq'], ['dx'])
         self.dd_fwd_kin = ca.Function('ddx', [self.q, self.dq, self.ddq],
                                       [Jd + J@self.ddq], ['q', 'dq', 'ddq'], ['ddx'])
+        
 
     def build_ddq(self, q, dq, tau_err):
         """ Returns the expression for the joint acceleration
@@ -62,6 +64,16 @@ class robot():
 
         return ca.inv(M)@(tau_err-J.T@(P_s@Jd+F_s))
 
+    def build_disc_dyn(self, h):
+        q = ca.SX.sym('q', self.nq)
+        dq = ca.SX.sym('dq', self.nq)
+        tau_err = ca.SX.sym('tau_err', self.nq)
+        ddq = self.build_ddq(q, dq, tau_err)
+        dq_next = dq + h*ddq
+        q_next = q + h*dq_next
+        self.disc_dyn =  ca.Function('disc_dyn', [ca.vertcat(q, dq), tau_err], [ca.vertcat(q_next, dq_next)],
+                           ['x', 'tau_err'], ['x_next'])
+    
     def build_A(self, h):
         """ Makes the linearized dynamic matrix A for semi-explicit integrator
             h: time step in seconds
@@ -79,9 +91,12 @@ class robot():
 
         return ca.Function('A', [q, dq, tau_err], [A],
                            ['q', 'dq', 'tau_err'],['A'])
-
+    def build_output(self):
+        x = ca.SX.sym('x', self.nx)
+        self.output = ca.Function('out',[x],[x[:6]])
+    
     def build_C_jt(self):
-        return np.hstack((np.eye(self.nq)), np.zeros((self.nq, self.nx-self.nq)))
+        return np.hstack((np.eye(self.nq), np.zeros((self.nq, self.nx-self.nq))))
 
     def get_tcp_motion(self, q, dq, ddq):
         x = self.fwd_kin(q)
