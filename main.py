@@ -2,7 +2,6 @@ import numpy as np
 import rospy
 from sensor_msgs.msg import JointState
 
-from robot import robot
 from observer import ekf
 
 def build_jt_msg(q, dq, tau = None):
@@ -20,6 +19,7 @@ class ros_observer():
         self.q = None        # joint position
         self.tau_err = None  # torque error
         self.F = None        # EE force
+        self.x = None        # observer state
 
         self.joint_sub = rospy.Subscriber(joint_topic, JointState,
                                            self.joint_callback, queue_size=1)
@@ -32,8 +32,7 @@ class ros_observer():
 
         self.init_rosparams()
         
-        self.rob = robot(self.urdf, self.h)
-        self.observer = ekf(self.rob, self.q, self.cov_init,
+        self.observer = ekf(self.urdf, self.h, self.q, self.cov_init,
                             self.proc_noise, self.meas_nosie)
 
     def init_rosparams(self):
@@ -43,10 +42,10 @@ class ros_observer():
         self.meas_nosie = rospy.get_param('meas_noise', [0.1]*6)
         cov_init = rospy.get_param('cov_init', [1.]*12)
         self.cov_init = np.diag(cov_init)
-        print("Waiting to conect to ros topics")
+        print("Waiting to conect to ros topics...")
         while True:
             if self.q is not None: break
-        print("Connected")
+        print("Connected to ros topics")
 
     def joint_callback(self, msg):
         """ To be called when the joint_state topic is published with joint position and torques """
@@ -71,13 +70,14 @@ class ros_observer():
                                     F = self.F)
 
     def publish_state(self):
-        # Recall that dict.get(key) will return None if key not fnd
-        msg = build_jt_msg(self.x['q'], self.x['dq'], self.x.get('ddq')) 
+        ddq = self.x.get('ddq', np.zeros(self.observer.dyn_sys.nq))
+        msg = build_jt_msg(self.x['q'], self.x['dq'], ddq) 
         if not rospy.is_shutdown():
-            self.joint_pub.publish(msg)     
-        #msg_ee = build_jt_msg(self.x['x'], self.x['dx'], self.x.get('ddx')) 
-        #if not rospy.is_shutdown():
-        #    self.ee_pub.publish(msg_ee)     
+            self.joint_pub.publish(msg)
+        x, dx, ddx = self.observer.dyn_sys.get_tcp_motion(self.x['q'], self.x['dq'], ddq)
+        msg_ee = build_jt_msg(x, dx, ddx)
+        if not rospy.is_shutdown():
+            self.ee_pub.publish(msg_ee)     
     
     def shutdown(self):
         print("Shutting down observer")

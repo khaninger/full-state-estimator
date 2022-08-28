@@ -38,9 +38,9 @@ class robot():
         q = self.vars['q']
         dq = self.vars['dq']
         
-        x = self.fwd_kin(q)  # x is TCP pose as (pos, R), where pos is a 3-Vector and R a rotation matrix
-        J = ca.jacobian(x[0], q)
-        Jd = ca.jacobian(J.reshape((np.prod(J.shape),1)), q)@dq# Jacobian on a matrix is tricky so we make a vector
+        x_ee = self.fwd_kin(q) # x is TCP pose as (pos, R), where pos is a 3-Vector and R a rotation matrix
+        J = ca.jacobian(x_ee[0], q)
+        Jd = ca.jacobian(J.reshape((np.prod(J.shape),1)), q)@dq # Jacobian on a matrix is tricky so we make a vector
         Jd = Jd.reshape(J.shape)@dq # then reshape the result into the right shape
 
         self.jac = ca.Function('jacobian', [q], [J], ['q'], ['Jac'])
@@ -60,7 +60,6 @@ class robot():
         """
         M = self.mass_mat(q)
         J = self.jac(q)
-
         F_s = self.get_state_forces(self.fwd_kin(q), J@dq)
 
         Jd = ca.jacobian(J.reshape((np.prod(J.shape),1)), q)@dq # Jacobian on a matrix is tricky so we make a vector
@@ -73,8 +72,8 @@ class robot():
         q = self.vars['q']
         dq = self.vars['dq']
         tau_err = self.vars['tau_err']
-        
         ddq = self.build_ddq(q, dq, tau_err)
+        
         fn_dict = {'q':q, 'dq':dq, 'tau_err':tau_err}
         fn_dict['dq_next']= dq + h*ddq
         fn_dict['q_next'] = q + h*fn_dict['dq_next']

@@ -1,10 +1,11 @@
 import casadi as ca
 import numpy as np
+from robot import robot
 
 class ekf():
     """ This defines an EKF observer """
-    def __init__(self, dyn_sys, q0, cov0, proc_noise, meas_noise):
-        self.dyn_sys = dyn_sys
+    def __init__(self, urdf, h, q0, cov0, proc_noise, meas_noise):
+        self.dyn_sys = robot(urdf, h)
         self.x = {'q': q0,
                   'dq': ca.DM.zeros(q0.size)} # initial state
         self.cov = cov0 # initial covariance
@@ -16,7 +17,6 @@ class ekf():
         self.x['tau_err'] = tau_err
         # Standad EKF update. See, e.g. pg. 51 in Thrun 'Probabilistic Robotics'
         x_next = self.dyn_sys.disc_dyn.call(self.x)      # predict state and output at next time step
-        #y_next = self.dyn_sys.output.call({"q_next":x_next['q_next']})
         y_next = x_next['q_next']
         A, C = self.dyn_sys.get_linearized(self.x)   # get the linearized dynamics and observation matrices
         cov_next = A.T@self.cov@A + self.proc_noise
