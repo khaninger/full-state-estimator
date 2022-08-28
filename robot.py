@@ -12,6 +12,7 @@ class robot():
         self.env_dyns = []
         self.build_fwd_kin()
         self.build_disc_dyn(h)
+        self.build_A(h)
         self.build_output()
         
 
@@ -82,21 +83,21 @@ class robot():
         dq = ca.SX.sym('dq', self.nq)
         tau_err = ca.SX.sym('tau_err', self.nq)
 
-        ddq = self.build_ddq(q, dq, tau_err)
+        #ddq = self.build_ddq(q, dq, tau_err)
+        ddq = 2*q + 1*dq
         ddq_q = ca.jacobian(ddq, q)
         ddq_dq = ca.jacobian(ddq, dq)
         I = ca.DM.eye(self.nq)
         A = ca.vertcat(ca.horzcat(I + h*h*ddq_q, h*h*ddq_dq),
                        ca.horzcat(h*ddq_q,   I + h*ddq_dq))
 
-        return ca.Function('A', [q, dq, tau_err], [A],
-                           ['q', 'dq', 'tau_err'],['A'])
+        x = ca.vertcat(q, dq)
+        self.A_fn =  ca.Function('A', [x, tau_err], [A],
+                                 ['x', 'tau_err'],['A'])
     def build_output(self):
         x = ca.SX.sym('x', self.nx)
         self.output = ca.Function('out',[x],[x[:6]])
-    
-    def build_C_jt(self):
-        return np.hstack((np.eye(self.nq), np.zeros((self.nq, self.nx-self.nq))))
+        self.C =  np.hstack((np.eye(self.nq), np.zeros((self.nq, self.nx-self.nq))))    
 
     def get_tcp_motion(self, q, dq, ddq):
         x = self.fwd_kin(q)
@@ -104,8 +105,8 @@ class robot():
         ddx = self.dd_fwd_kin(q, dq, ddq)
         return x, dx, ddx
 
-    def get_linearized(self, h):
-        return self.build_A(h), self.build_C_jt()
+    def get_linearized(self, x, tau_err):
+        return self.A_fn(x, tau_err), self.C
 
     def get_state_forces(self, x, dx):
         """ Returns the state-dependent external forces

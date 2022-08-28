@@ -15,12 +15,9 @@ class ekf():
         # Standad EKF update. See, e.g. pg. 51 in Thrun 'Probabilistic Robotics'
         x_next = self.dyn_sys.disc_dyn(self.x, tau_err)      # predict state and output at next time step
         y_next = self.dyn_sys.output(x_next)
-        #A, C = self.dyn_sys.get_linearized(self.x)   # get the linearized dynamics and observation matrices
-        #cov_next = A.T@self.cov@A + self.proc_noise
-        #K = cov_next@C.T@ca.inv(C@cov_next@C.T + self.meas_noise) # calculate Kalman gain
-        K = np.zeros((12,6))
-        C = np.hstack(((np.eye(6)), np.zeros((6, 6))))
-        cov_next = np.eye(12)
+        A, C = self.dyn_sys.get_linearized(self.x, tau_err)   # get the linearized dynamics and observation matrices
+        cov_next = A.T@self.cov@A + self.proc_noise
+        K = cov_next@C.T@ca.inv(C@cov_next@C.T + self.meas_noise) # calculate Kalman gain
         self.x = x_next + K@(q - y_next)
         self.cov = (ca.DM.eye(self.dyn_sys.nx)-K@C)@cov_next
         return self.x
