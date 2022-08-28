@@ -10,11 +10,11 @@ class robot():
     def __init__(self, urdf, h):
         self.load_kin_dyn(urdf)
         self.env_dyns = []
+        self.vars = {}
         self.build_fwd_kin()
         self.build_disc_dyn(h)
         self.build_A(h)
         self.build_output()
-        
 
     def add_env_dyn(self, env_dyn):
         """ Append the env_dyn to the robot """
@@ -31,21 +31,25 @@ class robot():
         self.ny = kindyn.nq()  # eventually needs an udpate to include f/t 
 
     def build_fwd_kin(self):
-        self.q = ca.SX.sym('q', self.nq)
-        self.dq = ca.SX.sym('dq', self.nq)
-        self.ddq = ca.SX.sym('ddq', self.nq)
+        self.vars['q'] = ca.SX.sym('q', self.nq)
+        self.vars['dq'] = ca.SX.sym('dq', self.nq)
+        self.vars['ddq']= ca.SX.sym('ddq', self.nq)
+        self.vars['tau_err'] = ca.SX.sym('tau_err', self.nq)
+        q = self.vars['q']
+        dq = self.vars['dq']
+        
+        x = self.fwd_kin(q)  # x is TCP pose as (pos, R), where pos is a 3-Vector and R a rotation matrix
+        J = ca.jacobian(x[0], q)
+        Jd = ca.jacobian(J.reshape((np.prod(J.shape),1)), q)@dq# Jacobian on a matrix is tricky so we make a vector
+        Jd = Jd.reshape(J.shape)@dq # then reshape the result into the right shape
 
-        x = self.fwd_kin(self.q)  # x is TCP pose as (pos, R), where pos is a 3-Vector and R a rotation matrix
-        J = ca.jacobian(x[0], self.q)
-        Jd = ca.jacobian(J.reshape((np.prod(J.shape),1)), self.q)@self.dq # Jacobian on a matrix is tricky so we make a vector
-        Jd = Jd.reshape(J.shape)@self.dq # then reshape the result into the right shape
+        self.jac = ca.Function('jacobian', [q], [J], ['q'], ['Jac'])
+        self.djac = ca.Function('dot_jacobian',  [q, dq], [Jd])
 
-        self.jac = ca.Function('jacobian', [self.q], [J], ['q'], ['Jac'])
-        self.djac = ca.Function('dot_jacobian',  [self.q, self.dq], [Jd])
-
-        self.d_fwd_kin = ca.Function('dx', [self.q, self.dq], [J@self.dq], ['q', 'dq'], ['dx'])
-        self.dd_fwd_kin = ca.Function('ddx', [self.q, self.dq, self.ddq],
-                                      [Jd + J@self.ddq], ['q', 'dq', 'ddq'], ['ddx'])
+        self.d_fwd_kin = ca.Function('dx', [q, dq], [J@dq], ['q', 'dq'], ['dx'])
+        self.dd_fwd_kin = ca.Function('ddx', [q, dq, self.vars['ddq']],
+                                      [Jd + J@self.vars['ddq']],
+                                      ['q', 'dq', 'ddq'], ['ddx'])
         
 
     def build_ddq(self, q, dq, tau_err):
@@ -66,14 +70,17 @@ class robot():
         return ca.inv(M)@(tau_err-J.T@(P_s@Jd+F_s))
 
     def build_disc_dyn(self, h):
-        q = ca.SX.sym('q', self.nq)
-        dq = ca.SX.sym('dq', self.nq)
-        tau_err = ca.SX.sym('tau_err', self.nq)
+        q = self.vars['q']
+        dq = self.vars['dq']
+        tau_err = self.vars['tau_err']
+        
         ddq = self.build_ddq(q, dq, tau_err)
-        dq_next = dq + h*ddq
-        q_next = q + h*dq_next
-        self.disc_dyn =  ca.Function('disc_dyn', [ca.vertcat(q, dq), tau_err], [ca.vertcat(q_next, dq_next)],
-                           ['x', 'tau_err'], ['x_next'])
+        fn_dict = {'q':q, 'dq':dq, 'tau_err':tau_err}
+        fn_dict['dq_next']= dq + h*ddq
+        fn_dict['q_next'] = q + h*fn_dict['dq_next']
+        self.disc_dyn =  ca.Function('disc_dyn', fn_dict,
+                                     ['q', 'dq', 'tau_err'],
+                                     ['q_next', 'dq_next'])
     
     def build_A(self, h):
         """ Makes the linearized dynamic matrix A for semi-explicit integrator
@@ -82,7 +89,7 @@ class robot():
         q = ca.SX.sym('q', self.nq)
         dq = ca.SX.sym('dq', self.nq)
         tau_err = ca.SX.sym('tau_err', self.nq)
-
+        
         #ddq = self.build_ddq(q, dq, tau_err)
         ddq = 2*q + 1*dq
         ddq_q = ca.jacobian(ddq, q)
@@ -91,13 +98,11 @@ class robot():
         A = ca.vertcat(ca.horzcat(I + h*h*ddq_q, h*h*ddq_dq),
                        ca.horzcat(h*ddq_q,   I + h*ddq_dq))
 
-        x = ca.vertcat(q, dq)
-        self.A_fn =  ca.Function('A', [x, tau_err], [A],
-                                 ['x', 'tau_err'],['A'])
+        fn_dict = {'q': q, 'dq': dq, 'tau_err': tau_err, 'A': A}
+        self.A_fn =  ca.Function('A', fn_dict,
+                                 ['q', 'dq', 'tau_err'],['A'])
     def build_output(self):
-        x = ca.SX.sym('x', self.nx)
-        self.output = ca.Function('out',[x],[x[:6]])
-        self.C =  np.hstack((np.eye(self.nq), np.zeros((self.nq, self.nx-self.nq))))    
+        self.C =  np.hstack((np.eye(self.nq), np.zeros((self.nq, self.nx-self.nq))))
 
     def get_tcp_motion(self, q, dq, ddq):
         x = self.fwd_kin(q)
@@ -105,8 +110,8 @@ class robot():
         ddx = self.dd_fwd_kin(q, dq, ddq)
         return x, dx, ddx
 
-    def get_linearized(self, x, tau_err):
-        return self.A_fn(x, tau_err), self.C
+    def get_linearized(self, state):
+        return self.A_fn.call(state)['A'], self.C
 
     def get_state_forces(self, x, dx):
         """ Returns the state-dependent external forces
