@@ -32,14 +32,16 @@ class ros_observer():
 
         self.init_rosparams()
         
-        self.observer = ekf(self.urdf, self.h, self.q, self.cov_init,
-                            self.proc_noise, self.meas_nosie)
+        self.observer = ekf(self.urdf_path, self.h, self.q, self.cov_init,
+                            self.proc_noise, self.meas_noise, self.fric_model)
 
     def init_rosparams(self):
         self.h = rospy.get_param('obs_rate', 1./475.)
-        self.urdf = rospy.get_param('robot_description')
-        self.proc_noise = rospy.get_param('proc_noise', [0.01]*12)
-        self.meas_nosie = rospy.get_param('meas_noise', [0.1]*6)
+        self.urdf_path = rospy.get_param('urdf_description', 'urdf/src/racer_description/urdf/racer7.urdf')
+        self.proc_noise = rospy.get_param('proc_noise', [1e-3]*12)
+        self.meas_noise = rospy.get_param('meas_noise', [1e-2]*6)
+        self.fric_model = {}
+        self.fric_model['visc'] = rospy.get_param('visc_fric', [0.2]*6)
         cov_init = rospy.get_param('cov_init', [1.]*12)
         self.cov_init = np.diag(cov_init)
         print("Waiting to conect to ros topics...")
@@ -75,6 +77,8 @@ class ros_observer():
         if not rospy.is_shutdown():
             self.joint_pub.publish(msg)
         x, dx, ddx = self.observer.dyn_sys.get_tcp_motion(self.x['q'], self.x['dq'], ddq)
+        #print('x: {}'.format(self.x['q']))
+        #print('cov: {}'.format(self.observer.cov))
         msg_ee = build_jt_msg(x, dx, ddx)
         if not rospy.is_shutdown():
             self.ee_pub.publish(msg_ee)     
