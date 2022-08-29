@@ -8,7 +8,8 @@ import pinocchio.casadi as cpin
 import faulthandler
 faulthandler.enable()
 
-model = pin.buildModelFromUrdf('urdf/src/racer_description/urdf/racer7.urdf')
+#model = pin.buildModelFromUrdf('urdf/src/racer_description/urdf/racer7.urdf')
+model = pin.buildModelFromUrdf('urdf/src/ur_description/urdf/ur5_robot.urdf')
 data = model.createData()
 cmodel = cpin.Model(model)
 cdata = cmodel.createData()

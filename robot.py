@@ -2,16 +2,17 @@ import pinocchio as pin
 import pinocchio.casadi as cpin
 import numpy as np
 import casadi as ca
+from casadi_kin_dyn import pycasadi_kin_dyn
 
 class robot():
     """ This class handles the loading of robot dynamics/kinematics, the discretization/integration, and linearization
         Somewhat humerously, this class is stateless (e.g. the actual system state shouldn't be stored here).
     """
-    def __init__(self, urdf_path, h, fric_model):
+    def __init__(self, urdf, urdf_path, h, fric_model):
         self.env_dyns = []
         self.vars = {}
         self.fric_model = fric_model
-        self.load_kin_dyn(urdf_path)
+        self.load_kin_dyn(urdf, urdf_path)
         self.build_fwd_kin()
         self.build_disc_dyn(h)
         self.build_output()
@@ -20,11 +21,14 @@ class robot():
         """ Append the env_dyn to the robot """
         self.env_dyns.append(env_dyn)
 
-    def load_kin_dyn(self, urdf_path):
+    def load_kin_dyn(self, urdf, urdf_path):
         model = pin.buildModelFromUrdf(urdf_path)
         data = model.createData()
         self.cmodel = cpin.Model(model)
         self.cdata = self.cmodel.createData()
+        kindyn = pycasadi_kin_dyn.CasadiKinDyn(urdf)
+        self.fwd_kin  = ca.Function.deserialize(kindyn.fk('base_link'))
+
         self.nq = model.nq
         self.nx = 2*model.nq
         self.ny = model.nq  # eventually needs an udpate to include f/t 
@@ -37,11 +41,12 @@ class robot():
         q = self.vars['q']
         dq = self.vars['dq']
         
-        x_ee = cpin.forwardKinematics(self.cmodel, self.cdata, q) # x is TCP pose as (pos, R), where pos is a 3-Vector and R a rotation matrix
+        x_ee = self.fwd_kin(q) # x is TCP pose as (pos, R), where pos is a 3-Vector and R a rotation matrix
+        #x_ee = cpin.forwardKinematics(self.cmodel, self.cdata, q) # x is TCP pose as (pos, R), where pos is a 3-Vector and R a rotation matrix
         J = ca.jacobian(x_ee[0], q)
-        #Jd = ca.jacobian(J.reshape((np.prod(J.shape),1)), q)@dq # Jacobian on a matrix is tricky so we make a vector
-        #Jd = Jd.reshape(J.shape)@dq # then reshape the result into the right shape
-        Jd = cpin.computeForwardKinematicsDerivatives(self.cmodel, self.cdata, q, dq)
+        Jd = ca.jacobian(J.reshape((np.prod(J.shape),1)), q)@dq # Jacobian on a matrix is tricky so we make a vector
+        Jd = Jd.reshape(J.shape)@dq # then reshape the result into the right shape
+        #Jd = cpin.computeForwardKinematicsDerivatives(self.cmodel, self.cdata, q, dq)
         
         self.jac = ca.Function('jacobian', [q], [J], ['q'], ['Jac'])
         self.djac = ca.Function('dot_jacobian',  [q, dq], [Jd])
@@ -57,7 +62,7 @@ class robot():
             dq: joint velocities
             tau_err: motor torque minus gravitational and coriolis forces
         """
-        Minv = cpin.getMinverse(self.cmodel, self.cdata, q)
+        Minv = cpin.computeMinverse(self.cmodel, self.cdata, q)
         J = self.jac(q)
         F_s = self.get_state_forces(self.fwd_kin(q), J@dq)
         tau_f = self.get_fric_forces(dq)
@@ -67,7 +72,7 @@ class robot():
         Jd = self.djac(q, dq)
         P_s = self.get_acc_forces(self.fwd_kin(q))
 
-        return Minv@(tau_err-J.T@(P_s@Jd+F_s)+tau_f)
+        return Minv@(tau_err-J.T@(P_s@Jd+F_s)-tau_f)
 
     def build_disc_dyn(self, h):
         q = self.vars['q']
@@ -76,7 +81,7 @@ class robot():
         ddq = self.get_ddq(q, dq, tau_err)
 
         fn_dict = {'q':q, 'dq':dq, 'tau_err':tau_err}
-        fn_dict['dq_next']= ddq #dq + h*ddq
+        fn_dict['dq_next']= dq + h*ddq
         fn_dict['q_next'] = q + h*dq #*fn_dict['dq_next']
 
         self.disc_dyn =  ca.Function('disc_dyn', fn_dict,

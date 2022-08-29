@@ -32,16 +32,17 @@ class ros_observer():
 
         self.init_rosparams()
         
-        self.observer = ekf(self.urdf_path, self.h, self.q, self.cov_init,
+        self.observer = ekf(self.urdf, self.urdf_path, self.h, self.q, self.cov_init,
                             self.proc_noise, self.meas_noise, self.fric_model)
 
     def init_rosparams(self):
         self.h = rospy.get_param('obs_rate', 1./475.)
         self.urdf_path = rospy.get_param('urdf_description', 'urdf/src/racer_description/urdf/racer7.urdf')
-        self.proc_noise = rospy.get_param('proc_noise', [1e-3]*12)
-        self.meas_noise = rospy.get_param('meas_noise', [1e-2]*6)
+        self.urdf = rospy.get_param('robot_description')
+        self.proc_noise = rospy.get_param('proc_noise', [1e4]*12)
+        self.meas_noise = rospy.get_param('meas_noise', [1e0]*6)
         self.fric_model = {}
-        self.fric_model['visc'] = rospy.get_param('visc_fric', [0.2]*6)
+        self.fric_model['visc'] = rospy.get_param('visc_fric', [0.3]*6)
         cov_init = rospy.get_param('cov_init', [1.]*12)
         self.cov_init = np.diag(cov_init)
         print("Waiting to conect to ros topics...")
@@ -67,9 +68,13 @@ class ros_observer():
             print("Error loading ROS message in force_callback")
 
     def observer_update(self):
-        self.x = self.observer.step(q = self.q,
-                                    tau_err = self.tau_err,
-                                    F = self.F)
+        try:
+            self.x = self.observer.step(q = self.q,
+                                        tau_err = self.tau_err,
+                                        F = self.F)
+        except:
+            print("Error in observer step")
+            rospy.signal_shutdown("error in observer")
 
     def publish_state(self):
         ddq = self.x.get('ddq', np.zeros(self.observer.dyn_sys.nq))
