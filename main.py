@@ -55,7 +55,7 @@ class ros_observer():
     def joint_callback(self, msg):
         """ To be called when the joint_state topic is published with joint position and torques """
         try:
-            self.q = np.array(msg.position)/360*2*np.pi
+            self.q = np.array(msg.position)#/360*2*np.pi
             self.tau_err = np.array(msg.effort)
         except:
             print("Error loading ROS message in joint_callback")
@@ -85,16 +85,15 @@ class ros_observer():
             self.joint_pub.publish(msg)
         x, dx, ddx = self.observer.dyn_sys.get_tcp_motion(self.x['q'], self.x['dq'], ddq)
         #print('x: {}'.format(x[0]))
-        msg_ee = build_jt_msg(x, dx, ddx)
-        if not rospy.is_shutdown():
-            self.ee_pub.publish(msg_ee)     
+        #msg_ee = build_jt_msg(x.full(), dx.full(), ddx)
+        #if not rospy.is_shutdown():
+        #    self.ee_pub.publish(msg_ee)     
     
     def shutdown(self):
         print("Shutting down observer")
 
 def start_node():
     rospy.init_node('observer')
-
     node = ros_observer()
     rospy.on_shutdown(node.shutdown)  # Set shutdown to be executed when ROS exits
     rospy.spin()

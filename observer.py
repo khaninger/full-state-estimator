@@ -25,8 +25,8 @@ class ekf():
         if np.any(np.isnan(L)):
            raise ValueError("Nans in the L matrix")
         x_corr = ca.vertcat(x_next['q_next'], x_next['dq_next']) + L@(q - x_next['q_next'])
-        self.x['q'] = x_corr[:self.dyn_sys.nq]
-        self.x['dq'] = x_corr[self.dyn_sys.nq:]
+        self.x['q'] = x_corr[:self.dyn_sys.nq].full()
+        self.x['dq'] = x_corr[self.dyn_sys.nq:].full()
         self.cov = (ca.DM.eye(self.dyn_sys.nx)-L@C)@cov_next
         return self.x
 
