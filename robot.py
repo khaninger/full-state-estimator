@@ -27,8 +27,8 @@ class robot():
         self.cmodel = cpin.Model(model)
         self.cdata = self.cmodel.createData()
         kindyn = pycasadi_kin_dyn.CasadiKinDyn(urdf)
-        self.fwd_kin  = ca.Function.deserialize(kindyn.fk('base_link'))
-
+        self.fwd_kin  = ca.Function.deserialize(kindyn.fk('link_6'))
+        
         self.nq = model.nq
         self.nx = 2*model.nq
         self.ny = model.nq  # eventually needs an udpate to include f/t 
@@ -42,6 +42,7 @@ class robot():
         dq = self.vars['dq']
         
         x_ee = self.fwd_kin(q) # x is TCP pose as (pos, R), where pos is a 3-Vector and R a rotation matrix
+        print(x_ee)
         #x_ee = cpin.forwardKinematics(self.cmodel, self.cdata, q) # x is TCP pose as (pos, R), where pos is a 3-Vector and R a rotation matrix
         J = ca.jacobian(x_ee[0], q)
         Jd = ca.jacobian(J.reshape((np.prod(J.shape),1)), q)@dq # Jacobian on a matrix is tricky so we make a vector
@@ -72,7 +73,7 @@ class robot():
         Jd = self.djac(q, dq)
         P_s = self.get_acc_forces(self.fwd_kin(q))
 
-        return Minv@(tau_err-J.T@(P_s@Jd+F_s)-tau_f)
+        return Minv@(tau_err-J.T@(P_s@Jd+F_s)+tau_f)
 
     def build_disc_dyn(self, h):
         q = self.vars['q']
@@ -80,13 +81,13 @@ class robot():
         tau_err = self.vars['tau_err']
         ddq = self.get_ddq(q, dq, tau_err)
 
-        fn_dict = {'q':q, 'dq':dq, 'tau_err':tau_err}
+        fn_dict = {'q':q, 'dq':dq, 'ddq':ddq, 'tau_err':tau_err}
         fn_dict['dq_next']= dq + h*ddq
-        fn_dict['q_next'] = q + h*dq #*fn_dict['dq_next']
+        fn_dict['q_next'] = q + h*fn_dict['dq_next']
 
         self.disc_dyn =  ca.Function('disc_dyn', fn_dict,
                                      ['q', 'dq', 'tau_err'],
-                                     ['q_next', 'dq_next'])
+                                     ['q_next', 'dq_next', 'ddq'])
         self.build_A(h)
     
     def build_A(self, h):
@@ -138,7 +139,7 @@ class robot():
         return F
 
     def get_fric_forces(self, dq):
-        return -ca.sign(dq)*dq*self.fric_model['visc']
+        return -dq*self.fric_model['visc']
         
     def get_acc_forces(self, x):
         """ Returns the acceleration-dependent external forces

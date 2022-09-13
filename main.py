@@ -36,15 +36,17 @@ class ros_observer():
                             self.proc_noise, self.meas_noise, self.fric_model)
 
     def init_rosparams(self):
-        self.h = rospy.get_param('obs_rate', 1./475.)
         self.urdf_path = rospy.get_param('urdf_description', 'urdf/src/racer_description/urdf/racer7.urdf')
         self.urdf = rospy.get_param('robot_description')
-        self.proc_noise = rospy.get_param('proc_noise', [1e4]*12)
-        self.meas_noise = rospy.get_param('meas_noise', [1e0]*6)
-        self.fric_model = {}
-        self.fric_model['visc'] = rospy.get_param('visc_fric', [0.3]*6)
-        cov_init = rospy.get_param('cov_init', [1.]*12)
-        self.cov_init = np.diag(cov_init)
+        
+        self.fric_model = {'visc':np.array(rospy.get_param('visc_fric', [0.3]*6))}
+        self.h = rospy.get_param('obs_rate', 1./475.)
+        
+        self.proc_noise = {'pos':np.array(rospy.get_param('pos_noise', [1e0]*6)),
+                           'vel':np.array(rospy.get_param('vel_noise', [1e3]*6))}
+        self.meas_noise = {'pos':np.array(rospy.get_param('meas_noise', [1e-1]*6))}
+        self.cov_init = np.array(rospy.get_param('cov_init', [1.]*12))
+        
         print("Waiting to conect to ros topics...")
         while True:
             if self.q is not None: break
@@ -82,8 +84,7 @@ class ros_observer():
         if not rospy.is_shutdown():
             self.joint_pub.publish(msg)
         x, dx, ddx = self.observer.dyn_sys.get_tcp_motion(self.x['q'], self.x['dq'], ddq)
-        #print('x: {}'.format(self.x['q']))
-        #print('cov: {}'.format(self.observer.cov))
+        print('x: {}'.format(x[0]))
         msg_ee = build_jt_msg(x, dx, ddx)
         if not rospy.is_shutdown():
             self.ee_pub.publish(msg_ee)     
@@ -93,12 +94,10 @@ class ros_observer():
 
 def start_node():
     rospy.init_node('observer')
-    
+
     node = ros_observer()
     rospy.on_shutdown(node.shutdown)  # Set shutdown to be executed when ROS exits
     rospy.spin()
-
-
     
 if __name__ == '__main__':
     start_node()
