@@ -42,7 +42,9 @@ class robot():
         dq = self.vars['dq']
         
         x_ee = self.fwd_kin(q) # x is TCP pose as (pos, R), where pos is a 3-Vector and R a rotation matrix
-        print(x_ee)
+        #print(x_ee)
+        print("zeros {}".format(self.fwd_kin(np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0]))))
+        print("test  {}".format(self.fwd_kin(np.array([0.0, -np.pi, 0.0, 0.0, 0.0, 0.0]))))
         #x_ee = cpin.forwardKinematics(self.cmodel, self.cdata, q) # x is TCP pose as (pos, R), where pos is a 3-Vector and R a rotation matrix
         J = ca.jacobian(x_ee[0], q)
         Jd = ca.jacobian(J.reshape((np.prod(J.shape),1)), q)@dq # Jacobian on a matrix is tricky so we make a vector

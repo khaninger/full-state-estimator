@@ -52,7 +52,6 @@
   </link>
   <link name="gripper">
   </link>
-
   <joint name="fixed" type="fixed">
     <origin rpy="0.0 0.0 0.0" xyz="0 0 0"/>
     <parent link="world"/>

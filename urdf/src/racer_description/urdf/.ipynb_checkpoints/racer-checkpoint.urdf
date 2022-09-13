@@ -1,26 +1,66 @@
 <?xml version="1.0" encoding="utf-8"?>
-<robot name="racer7">
+<robot name="racer">
   <link name="world"/>
   <link name="base_link">
     <inertial>
       <origin rpy="0 0 0" xyz="-0.017279            0.00078009           0.14492"/>
-      <mass value="75.931"/>
+      <mass value="6.215"/>
       <inertia ixx="0.05293" ixy="1.9878e-05" ixz="-0.0043586" iyy="0.060873" iyz="5.4713e-06" izz="0.042672"/>
     </inertial>
+    <visual>
+     
+      <geometry>
+        <mesh filename="package://racer_description/mesh/base_link.STL"/>
+      </geometry>
+      <material name="base_link_material">
+        <color rgba="0 0 0 1"/>
+      </material>
+    </visual>
+    <collision>
+      <geometry>
+        <mesh filename="package://racer_description/mesh/base_link.STL"/>
+      </geometry>
+    </collision>
   </link>
   <link name="link_1">
     <inertial>
       <origin rpy="0 0 0" xyz=" 0.0375246972830294 -0.0047330722058841   0.119959023209445"/>
-      <mass value="22.4953"/>
+      <mass value="5.46814182699"/>
       <inertia ixx="0.0559481276261" ixy="9.66643445884e-05" ixz="-0.00417556460737" iyy="0.0332098630782" iyz="1.37699311238e-05" izz="0.0442971694125"/>
     </inertial>
+    <visual>
+      <geometry>
+        <mesh filename="package://racer_description/mesh/link_1.STL"/>
+      </geometry>
+      <material name="link_1_material">
+        <color rgba="1 1 1 1"/>
+      </material>
+    </visual>
+    <collision>
+      <geometry>
+        <mesh filename="package://racer_description/mesh/link_1.STL"/>
+      </geometry>
+    </collision>
   </link>
   <link name="link_2">
     <inertial>
       <origin rpy="0 0 0" xyz="-0.0190824069529527 -0.00775028525116991  0.199983435151925"/>
-      <mass value="23.396"/>
+      <mass value="3.4970386262"/>
       <inertia ixx="0.0677992942709" ixy="0.000380936310688" ixz="-0.000855778184674" iyy="0.0676014641813" iyz="0.0016683422702" izz="0.0164275616509"/>
     </inertial>
+    <visual>
+      <geometry>
+        <mesh filename="package://racer_description/mesh/link_2.STL"/>
+      </geometry>
+      <material name="link_2_material">
+        <color rgba="0 0 0 1"/>
+      </material>
+    </visual>
+    <collision>
+      <geometry>
+        <mesh filename="package://racer_description/mesh/link_2.STL"/>
+      </geometry>
+    </collision>
   </link>
   <link name="link_3">
     <inertial>
@@ -28,31 +68,95 @@
       <mass value="2.68331708367"/>
       <inertia ixx="0.00685071381057" ixy="0.000112640516974" ixz="0.00186954281903" iyy="0.00785316794832" iyz="-0.000111709680918" izz="0.00558392288231"/>
     </inertial>
+    <visual>
+      <geometry>
+        <mesh filename="package://racer_description/mesh/link_3.STL"/>
+      </geometry>
+      <material name="link_3_material">
+        <color rgba="1 1 1 1"/>
+      </material>
+    </visual>
+    <collision>
+      <geometry>
+        <mesh filename="package://racer_description/mesh/link_3.STL"/>
+      </geometry>
+    </collision>
   </link>
   <link name="link_4">
     <inertial>
       <origin rpy="0 0 0" xyz="-0.00227788070042482 -0.00123420975347735 0.0624227170360064"/>
-      <mass value="13.0332"/>
+      <mass value="1.62984418881"/>
       <inertia ixx="0.00636789477653" ixy="-2.81769690429e-06" ixz="-7.6286206597e-05" iyy="0.00700400581465" iyz="-3.84855032439e-05" izz="0.00283764341486"/>
     </inertial>
+    <visual>
+      <geometry>
+        <mesh filename="package://racer_description/mesh/link_4.STL"/>
+      </geometry>
+      <material name="link_4_material">
+        <color rgba="0 0 0 1"/>
+      </material>
+    </visual>
+    <collision>
+      <geometry>
+        <mesh filename="package://racer_description/mesh/link_4.STL"/>
+      </geometry>
+    </collision>
   </link>
   <link name="link_5">
     <inertial>
       <origin rpy="0 0 0" xyz="8.42234791683474E-06 0.000438242230281476 0.0364200996149726"/>
-      <mass value="6.03009"/>
+      <mass value="0.805335362671"/>
       <inertia ixx="0.000450875634719" ixy="-1.62647753018e-07" ixz="5.47682000717e-08" iyy="0.00048212697353" iyz="2.28779867179e-06" izz="0.000531776234546"/>
     </inertial>
+    <visual>
+      <geometry>
+        <mesh filename="package://racer_description/mesh/link_5.STL"/>
+      </geometry>
+      <material name="link_5_material">
+        <color rgba="1 1 1 1"/>
+      </material>
+    </visual>
+    <collision>
+      <geometry>
+        <mesh filename="package://racer_description/mesh/link_5.STL"/>
+      </geometry>
+    </collision>
   </link>
   <link name="link_6">
     <inertial>
       <origin rpy="0 0 0" xyz="5.64165774402925E-05 -4.33361315668251E-07 0.00365583421206228"/>
-      <mass value="6.267"/> 
-      <inertia ixx="6.94455842253e-02" ixy="-3.96352989851e-10" ixz="-3.15927343591e-08" iyy="6.89301150818e-02" iyz="3.03515042446e-10" izz="9.670787784e-2"/>
+      <mass value="0.073"/> 
+      <inertia ixx="6.94455842253e-06" ixy="-3.96352989851e-10" ixz="-3.15927343591e-08" iyy="6.89301150818e-06" iyz="3.03515042446e-10" izz="9.670787784e-06"/>
     </inertial>
+    <visual>
+      <geometry>
+        <mesh filename="package://racer_description/mesh/link_6.STL"/>
+      </geometry>
+      <material name="link_6_material">
+        <color rgba="0 0 0 1"/>
+      </material>
+    </visual>
+    <collision>
+      <geometry>
+        <mesh filename="package://racer_description/mesh/link_6.STL"/>
+      </geometry>
+    </collision>
   </link>
   <link name="gripper">
+    <visual>
+      <geometry>
+        <mesh filename="package://racer_description/mesh/gripper_v2.STL"/>
+      </geometry>
+      <material name="gripper_material">
+        <color rgba="1 1 1 1"/>
+      </material>
+    </visual>
+    <collision>
+      <geometry>
+        <mesh filename="package://racer_description/mesh/gripper_v2.STL"/>
+      </geometry>
+    </collision>
   </link>
-
   <joint name="fixed" type="fixed">
     <origin rpy="0.0 0.0 0.0" xyz="0 0 0"/>
     <parent link="world"/>
@@ -61,21 +165,21 @@
     <limit effort="0.0" lower="0" upper="0" velocity="0"/>
   </joint>
   <joint name="head_swivel" type="revolute">
-    <origin rpy="0 0 0" xyz="0.0 0.0 0.430"/>
+    <origin rpy="0 0 0" xyz="0.0 0.0 0.1895"/>
     <parent link="base_link"/>
     <child link="link_1"/>
     <axis xyz="0  0  1"/>
     <limit effort="10000.0" lower="-2.96705972839" upper="2.96705972839" velocity="6.98131700798"/>
   </joint>
   <joint name="joint_2" type="revolute">
-    <origin rpy="0.0 1.57 0.0" xyz="0.05 0.0 0.590"/>
+    <origin rpy="0.0 1.57 0.0" xyz="0.05 0.0 0.1755"/>
     <parent link="link_1"/>
     <child link="link_2"/>
     <axis xyz="0 -1  0"/>
     <limit effort="10000.0" lower="-1.4835298642" upper="2.35619449019" velocity="6.28318530718"/>
   </joint>
   <joint name="joint_3" type="revolute">
-    <origin rpy="0.0 -1.57 0.0" xyz="0.0 0.0 0.684"/>
+    <origin rpy="0.0 -1.57 0.0" xyz="0.0 0.0 0.37"/>
     <parent link="link_2"/>
     <child link="link_3"/>
     <axis xyz="0 -1  0"/>
