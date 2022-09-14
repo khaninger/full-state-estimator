@@ -9,17 +9,26 @@ class robot():
         Somewhat humerously, this class is stateless (e.g. the actual system state shouldn't be stored here).
     """
     def __init__(self, urdf, urdf_path, h, fric_model):
-        self.env_dyns = []
+        self.contacts = []
         self.vars = {}
+        self.params_off = {}
+        self.params_on = {}
+        self.jit_options = {} #{'jit':True, "jit_options":{"compiler":"gcc"}}
         self.fric_model = fric_model
         self.load_kin_dyn(urdf, urdf_path)
         self.build_fwd_kin()
         self.build_disc_dyn(h)
         self.build_output()
 
-    def add_env_dyn(self, env_dyn):
-        """ Append the env_dyn to the robot """
-        self.env_dyns.append(env_dyn)
+    def add_contact(self, contact_model):
+        """ Add the contact_model to the robot """
+        x_i = self.x_ee[0]+self.x_ee[1]@contact_model['pos']
+        n_i = contact_model['stiff']/ca.norm2(contact_model['stiff'])
+        J_i = ca.jacobian(n_i.T@x_i, self.vars['q'])
+        F_i = contact_model['stiff']@(x_i - contact_model['rest_pos'])
+        tau_i = J_i.T@F_i
+        contact_i = ca.Function([self.vars['q']], [tau_i], ['q'], ['tau_i']
+        self.contacts.append(contact_i)
 
     def load_kin_dyn(self, urdf, urdf_path):
         model = pin.buildModelFromUrdf(urdf_path)
@@ -41,18 +50,19 @@ class robot():
         q = self.vars['q']
         dq = self.vars['dq']
         
-        x_ee = self.fwd_kin(q) # x is TCP pose as (pos, R), where pos is a 3-Vector and R a rotation matrix
+        self.x_ee = self.fwd_kin(q) # x is TCP pose as (pos, R), where pos is a 3-Vector and R a rotation matrix
         #print("zeros {}".format(self.fwd_kin(np.array([0.0, 0.0, -np.pi/2, 0.0, 0.0, 0.0]))))
         #print("test  {}".format(self.fwd_kin(np.array([0.0, 0, -np.pi/2, np.pi/2, 0.0, 0.0]))))
+
         #x_ee = cpin.forwardKinematics(self.cmodel, self.cdata, q) # x is TCP pose as (pos, R), where pos is a 3-Vector and R a rotation matrix
-        J = ca.jacobian(x_ee[0], q)
+        J = ca.jacobian(self.x_ee[0], q)
         Jd = ca.jacobian(J.reshape((np.prod(J.shape),1)), q)@dq # Jacobian on a matrix is tricky so we make a vector
         Jd = Jd.reshape(J.shape)@dq # then reshape the result into the right shape
         #Jd = cpin.computeForwardKinematicsDerivatives(self.cmodel, self.cdata, q, dq)
         
         self.jac = ca.Function('jacobian', [q], [J], ['q'], ['Jac'])
         self.djac = ca.Function('dot_jacobian',  [q, dq], [Jd])
-        #print(self.jac(np.array([np.pi/2, 0.0, np.pi/2, 0.0, 0.0, 0.0])))
+        
         self.d_fwd_kin = ca.Function('dx', [q, dq], [J@dq], ['q', 'dq'], ['dx'])
         self.dd_fwd_kin = ca.Function('ddx', [q, dq, self.vars['ddq']],
                                       [Jd + J@self.vars['ddq']],
@@ -65,16 +75,11 @@ class robot():
             tau_err: motor torque minus gravitational and coriolis forces
         """
         Minv = cpin.computeMinverse(self.cmodel, self.cdata, q)
-        J = self.jac(q)
-        F_s = self.get_state_forces(self.fwd_kin(q), J@dq)
-        tau_f = self.get_fric_forces(dq)
-        
-        #Jd = ca.jacobian(J.reshape((np.prod(J.shape),1)), q)@dq # Jacobian on a matrix is tricky so we make a vector
-        #Jd = Jd.reshape(J.shape)@dq                             # then reshape the result into the right shape
-        Jd = self.djac(q, dq)
-        P_s = self.get_acc_forces(self.fwd_kin(q))
 
-        return Minv@(tau_err-J.T@(P_s@Jd+F_s)+tau_f)
+        tau_i = self.get_contact_forces(q, dq)
+        tau_f = self.get_fric_forces(dq)
+
+        return Minv@(tau_err+tau_i+tau_f)
 
     def build_disc_dyn(self, h):
         q = self.vars['q']
@@ -88,7 +93,7 @@ class robot():
 
         self.disc_dyn =  ca.Function('disc_dyn', fn_dict,
                                      ['q', 'dq', 'tau_err'],
-                                     ['q_next', 'dq_next', 'ddq'])
+                                     ['q_next', 'dq_next', 'ddq'], self.jit_options)
         self.build_A(h)
     
     def build_A(self, h):
@@ -104,7 +109,7 @@ class robot():
         x_concat = ca.vertcat(q, dq)
         fn_dict['A'] = ca.jacobian(x_next_concat, x_concat)
         self.A_fn = ca.Function('A', fn_dict,  
-                                ['q', 'dq', 'tau_err'],['A'])
+                                ['q', 'dq', 'tau_err'],['A'], self.jit_options)
         '''
         ddq = self.get_ddq(q, dq, tau_err)
         ddq_q = ca.jacobian(ddq, q)
@@ -129,21 +134,15 @@ class robot():
     def get_linearized(self, state):
         return self.A_fn.call(state)['A'], self.C
 
-    def get_state_forces(self, x, dx):
+    def get_contact_forces(self, q, dq):
         """ Returns the state-dependent external forces
-            x:  TCP pose
-            dx: TCP velocity
+            q: joint pose
+            dq: joint velocity
         """
         F = 0
-        for env in self.env_dyns:
-            F += env.eval(x, dx)
+        for con in self.contacts:
+            F += con.eval(q)
         return F
 
     def get_fric_forces(self, dq):
         return -dq*self.fric_model['visc']
-        
-    def get_acc_forces(self, x):
-        """ Returns the acceleration-dependent external forces
-        """
-        return 0
-        

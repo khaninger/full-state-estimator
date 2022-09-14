@@ -24,6 +24,7 @@ class ekf():
         L = cov_next@C.T@ca.inv(C@cov_next@(C.T) + self.meas_noise) # calculate Kalman gain
         if np.any(np.isnan(L)):
            raise ValueError("Nans in the L matrix")
+        #print(q-x_next['q_next'])
         x_corr = ca.vertcat(x_next['q_next'], x_next['dq_next']) + L@(q - x_next['q_next'])
         self.x['q'] = x_corr[:self.dyn_sys.nq].full()
         self.x['dq'] = x_corr[self.dyn_sys.nq:].full()

@@ -39,13 +39,17 @@ class ros_observer():
         self.urdf_path = rospy.get_param('urdf_description', 'urdf/src/racer_description/urdf/racer7.urdf')
         self.urdf = rospy.get_param('robot_description')
         
-        self.fric_model = {'visc':np.array(rospy.get_param('visc_fric', [0.3]*6))}
+        self.fric_model = {'visc':np.array(rospy.get_param('visc_fric', [0.2]*6))}
         self.h = rospy.get_param('obs_rate', 1./475.)
         
-        self.proc_noise = {'pos':np.array(rospy.get_param('pos_noise', [1e0]*6)),
-                           'vel':np.array(rospy.get_param('vel_noise', [1e3]*6))}
-        self.meas_noise = {'pos':np.array(rospy.get_param('meas_noise', [1e-1]*6))}
+        self.proc_noise = {'pos':np.array(rospy.get_param('pos_noise', [1e-1]*6)),
+                           'vel':np.array(rospy.get_param('vel_noise', [1e2]*6))}
+        self.meas_noise = {'pos':np.array(rospy.get_param('meas_noise', [5e-2]*6))}
         self.cov_init = np.array(rospy.get_param('cov_init', [1.]*12))
+
+        self.contact_1 = {'pos': np.array(rospy.get_param('contact_1_pos', [0]*3)),
+                          'stiff': np.array(rospy.get_param('contact_1_stiff', [0]*3)),
+                          'rest_pos': np.array(rospy.get_param('contact_1_rest', [0]*3))}        
         
         print("Waiting to conect to ros topics...")
         while True:
