@@ -2,7 +2,16 @@ import numpy as np
 import casadi as ca
 import time
 
-def loss_fn(obs, state, param):
+def loss_fn(states, inputs, param, disc_dyn):
+    ''' States is a trajectory as list.
+        Param are the parameters to optimize
+        disc_dyn is a function for next state as fn of state, input, param '''
+    pred_state =  states[0]  # pred state will be the predicted next state based on dyn
+    loss = 0
+    for state, inp in zip(states, inputs):
+        loss += ca.norm_2(state-pred_state)
+        pred_state = disc_dyn(prev_state, inp, param)
+    return loss
 
 def get_dec_vectors(param):
     x = x0 = lbx = ubx = []
@@ -34,8 +43,8 @@ def package_results(res, param):
         read_pos += v_size
     return res_dict
 
-def optimize(obs, state, param):
-    loss = loss_fn(obs, state, param)
+def optimize(states, inputs, param, disc_dyn):
+    loss = loss_fn(states, inputs, param, disc_dyn)
 
     x, x0, lbx, ubx = get_dec_vectors(param)
     
@@ -53,18 +62,14 @@ def optimize(obs, state, param):
     res = solver(x0=x0, lbx=lbx, ubx=ubx)
     status = solver.stats()['return_status']
     obj = res['f']
-    hyper.set_results(res['x'])
     solve_time += time.time()
-
+    res_dict = package_results(res['x'], param)
+    
     print("Solve time:  %s - %f sec" % (status, solve_time))
     print("Final obj:  {}".format(obj))
-    print()
+    print("Fit param:  {}".format(res_dict))
 
-    return 
-
-
-
-    return param_opt
+    return res_dict
 
 
 

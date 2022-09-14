@@ -8,26 +8,29 @@ class robot():
     """ This class handles the loading of robot dynamics/kinematics, the discretization/integration, and linearization
         Somewhat humerously, this class is stateless (e.g. the actual system state shouldn't be stored here).
     """
-    def __init__(self, urdf, urdf_path, h, fric_model):
+    def __init__(self, par, sym_par = {}):
         self.contacts = []
         self.vars = {}
-        self.params_off = {}
-        self.params_on = {}
         self.jit_options = {} #{'jit':True, "jit_options":{"compiler":"gcc"}}
-        self.fric_model = fric_model
-        self.load_kin_dyn(urdf, urdf_path)
+
+        self.load_kin_dyn(par['urdf'], par['urdf_path'])
         self.build_fwd_kin()
-        self.build_disc_dyn(h)
+
+        par.update(sym_par)
+        self.add_contact(par['contact_1'])
+        self.fric_model = par['fric_model']
+
+        self.build_disc_dyn(par['h'], sym_par)
         self.build_output()
 
     def add_contact(self, contact_model):
         """ Add the contact_model to the robot """
         x_i = self.x_ee[0]+self.x_ee[1]@contact_model['pos']
-        n_i = contact_model['stiff']/ca.norm2(contact_model['stiff'])
+        n_i = contact_model['stiff']/ca.norm_2(contact_model['stiff'])
         J_i = ca.jacobian(n_i.T@x_i, self.vars['q'])
-        F_i = contact_model['stiff']@(x_i - contact_model['rest_pos'])
+        F_i = ca.DM(contact_model['stiff']).T@(x_i - contact_model['rest'])
         tau_i = J_i.T@F_i
-        contact_i = ca.Function([self.vars['q']], [tau_i], ['q'], ['tau_i']
+        contact_i = ca.Function('contact', [self.vars['q']], [tau_i], ['q'], ['tau_i'])
         self.contacts.append(contact_i)
 
     def load_kin_dyn(self, urdf, urdf_path):
@@ -45,6 +48,7 @@ class robot():
     def build_fwd_kin(self):
         self.vars['q'] = ca.SX.sym('q', self.nq)
         self.vars['dq'] = ca.SX.sym('dq', self.nq)
+        self.vars['xi'] = ca.vertcat(self.vars['q'], self.vars['dq'])
         self.vars['ddq']= ca.SX.sym('ddq', self.nq)
         self.vars['tau_err'] = ca.SX.sym('tau_err', self.nq)
         q = self.vars['q']
@@ -67,33 +71,27 @@ class robot():
         self.dd_fwd_kin = ca.Function('ddx', [q, dq, self.vars['ddq']],
                                       [Jd + J@self.vars['ddq']],
                                       ['q', 'dq', 'ddq'], ['ddx'])
-
-    def get_ddq(self, q, dq, tau_err):
-        """ Returns the expression for the joint acceleration
-            q: joint positions
-            dq: joint velocities
-            tau_err: motor torque minus gravitational and coriolis forces
-        """
-        Minv = cpin.computeMinverse(self.cmodel, self.cdata, q)
-
-        tau_i = self.get_contact_forces(q, dq)
-        tau_f = self.get_fric_forces(dq)
-
-        return Minv@(tau_err+tau_i+tau_f)
-
-    def build_disc_dyn(self, h):
+        
+    def build_disc_dyn(self, h, sym_par):
         q = self.vars['q']
         dq = self.vars['dq']
         tau_err = self.vars['tau_err']
-        ddq = self.get_ddq(q, dq, tau_err)
 
-        fn_dict = {'q':q, 'dq':dq, 'ddq':ddq, 'tau_err':tau_err}
-        fn_dict['dq_next']= dq + h*ddq
-        fn_dict['q_next'] = q + h*fn_dict['dq_next']
+        Minv = cpin.computeMinverse(self.cmodel, self.cdata, q)
+        tau_i = self.get_contact_forces(q, dq)
+        tau_f = self.get_fric_forces(dq)
+                                
+        ddq =  Minv@(tau_err+tau_i+tau_f)
 
+        fn_dict = {'xi':self.vars['xi'], 'tau_err':tau_err}
+        fn_dict.update(sym_par)
+        dq_next= dq + h*ddq
+        q_next = q + h*dq_next
+        fn_dict['xi_next'] = ca.vertcat(q_next, dq_next)
+            
         self.disc_dyn =  ca.Function('disc_dyn', fn_dict,
-                                     ['q', 'dq', 'tau_err'],
-                                     ['q_next', 'dq_next', 'ddq'], self.jit_options)
+                                     ['xi', 'tau_err', *sym_par.keys()],
+                                     ['xi_next'], self.jit_options)
         self.build_A(h)
     
     def build_A(self, h):
@@ -102,14 +100,14 @@ class robot():
         """
         q = self.vars['q']
         dq = self.vars['dq']
-        tau_err = self.vars['tau_err']
-        fn_dict = {'q':q, 'dq':dq, 'tau_err':tau_err}
-        x_next = self.disc_dyn.call(fn_dict)
-        x_next_concat = ca.vertcat(x_next['q_next'], x_next['dq_next'])
-        x_concat = ca.vertcat(q, dq)
-        fn_dict['A'] = ca.jacobian(x_next_concat, x_concat)
+        fn_dict = {'xi':self.vars['xi'],
+                   'tau_err':self.vars['tau_err']}
+
+        res = self.disc_dyn.call(fn_dict)
+
+        fn_dict['A'] = ca.jacobian(res['xi_next'], self.vars['xi'])
         self.A_fn = ca.Function('A', fn_dict,  
-                                ['q', 'dq', 'tau_err'],['A'], self.jit_options)
+                                ['xi', 'tau_err'],['A'], self.jit_options)
         '''
         ddq = self.get_ddq(q, dq, tau_err)
         ddq_q = ca.jacobian(ddq, q)
@@ -141,7 +139,7 @@ class robot():
         """
         F = 0
         for con in self.contacts:
-            F += con.eval(q)
+            F += con(q)
         return F
 
     def get_fric_forces(self, dq):
