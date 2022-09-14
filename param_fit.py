@@ -2,22 +2,27 @@ import numpy as np
 import casadi as ca
 import time
 
-def loss_fn(states, inputs, param, disc_dyn):
+def loss_fn(states, inputs, param, disc_dyn, num_pts = 3500):
     ''' States is a trajectory as list.
         Param are the parameters to optimize
         disc_dyn is a function for next state as fn of state, input, param '''
     pred_state =  states[0]  # pred state will be the predicted next state based on dyn
     loss = 0
-    p = param
-    for state, inp in zip(states, inputs):
-        loss += ca.norm_2(state-pred_state)
-        p['xi'] = state
-        p['tau_err'] = inp
+    skip_size = int(len(states)/num_pts)
+    
+    for i in range(0, len(states)-1, skip_size):
+        param['xi'] = states[i]
+        param['tau_err'] = inputs[i]
 
-        pred_state = disc_dyn.call(p)['xi_next']
+        pred_state = disc_dyn.call(param)['xi_next']
+        
+        loss += ca.norm_2(states[i+1]-pred_state)
 
-    del p['xi']
-    del p['tau_err']
+    del param['xi']
+    del param['tau_err']
+
+    for p in param.values():
+        loss += 0.001*ca.norm_2(p)
     
     return loss
 
@@ -29,18 +34,17 @@ def get_dec_vectors(param):
     for k in param.keys():
         x += [param[k]]
         if k == 'stiff':
-            x0 += [ca.DM.zeros(3)]
+            x0 += [0.0001*ca.DM.ones(3)]
             lbx += [ca.DM.zeros(3)]
             ubx += [1e6*ca.DM.ones(3)]
         if k == 'pos':
             x0 += [ca.DM.zeros(3)]
-            lbx += [-0.2*ca.DM.ones(3)]
-            ubx += [0.2*ca.DM.ones(3)]
-        if k == 'rest_pos':
-            x0 += [ca.DM.zeros(3)]
-            lbx += [-0.2*ca.DM.ones(3)]
-            ubx += [0.2*ca.DM.ones(3)]
-    print(x)
+            lbx += [-0.5*ca.DM.ones(3)]
+            ubx += [0.5*ca.DM.ones(3)]
+        if k == 'rest':
+            x0 += [ca.DM((1.1, 0.4, 0.5))]
+            lbx += [-2*ca.DM.ones(3)]
+            ubx += [2*ca.DM.ones(3)]
     x = ca.vertcat(*x)
     x0 = ca.vertcat(*x0)
     lbx = ca.vertcat(*lbx)
@@ -50,8 +54,8 @@ def get_dec_vectors(param):
 def package_results(res, param):
     res_dict = {}
     read_pos = 0
-    for k in param.get_keys():
-        v_size = param[k].size
+    for k in param.keys():
+        v_size = param[k].size()[0]
         res_dict[k] = res[read_pos:read_pos + v_size]
         read_pos += v_size
     return res_dict
@@ -60,13 +64,11 @@ def optimize(states, inputs, param, disc_dyn):
     loss = loss_fn(states, inputs, param, disc_dyn)
 
     x, x0, lbx, ubx = get_dec_vectors(param)
-    print(x)
-    print(x0)
     
     nlp = {'x':x, 'f': loss}
 
     opts = {'expand':False,
-            'ipopt.print_level':3}
+            'ipopt.print_level':5}
 
     
     solver = ca.nlpsol('solver', 'ipopt', nlp, opts)

@@ -1,4 +1,6 @@
 import argparse
+import pickle
+from os.path import exists
 
 import numpy as np
 import rospy
@@ -46,13 +48,8 @@ class ros_observer():
                                       JointState, queue_size=1)
 
         params = init_rosparams()
-
-        print("Waiting to conect to ros topics...")
-        while True:
-            if self.q is not None: break
-        print("Connected to ros topics")
-        
-        self.observer = ekf(params, self.q)
+                
+        self.observer = ekf(params, np.zeros(6))#self.q)
 
 
     def joint_callback(self, msg):
@@ -73,14 +70,14 @@ class ros_observer():
             print("Error loading ROS message in force_callback")
 
     def observer_update(self):
-       # try:
-        self.x = self.observer.step(q = self.q,
-                                    tau_err = self.tau_err,
-                                    F = self.F)
-        #except Exception as e:
-        #    print("Error in observer step")
-        #    print(e)
-        #    rospy.signal_shutdown("error in observer")
+        try:
+            self.x = self.observer.step(q = self.q,
+                                        tau_err = self.tau_err,
+                                        F = self.F)
+        except Exception as e:
+            print("Error in observer step")
+            print(e)
+            rospy.signal_shutdown("error in observer")
 
     def publish_state(self):
         ddq = self.x.get('ddq', np.zeros(self.observer.dyn_sys.nq))
@@ -134,7 +131,14 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if args.opt_param_bag != "":
-        states, inputs = offline_observer_run(args.opt_param_bag)
+        if not exists('trajectory.pkl'):
+            states, inputs = offline_observer_run(args.opt_param_bag)
+            with open('trajectory.pkl', 'wb') as f:
+                pickle.dump((states, inputs), f)
+        with open('trajectory.pkl', 'rb') as f:
+            states, inputs = pickle.load(f)
         params = param_fit(states, inputs)
-        
+        for k,v in params.items():
+            rospy.set_param('contact_1_'+k, v.full().tolist())
+    
     start_node()
