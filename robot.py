@@ -28,7 +28,10 @@ class robot():
         x_i = self.x_ee[0]+self.x_ee[1]@contact_model['pos']
         n_i = contact_model['stiff']/ca.norm_2(contact_model['stiff'])
         J_i = ca.jacobian(n_i.T@x_i, self.vars['q'])
-        F_i = contact_model['stiff'].T@(x_i - contact_model['rest'])
+        if isinstance(contact_model['stiff'], np.ndarray):
+            F_i = ca.DM(contact_model['stiff']).T@(x_i - contact_model['rest'])
+        else:
+            F_i = contact_model['stiff'].T@(x_i - contact_model['rest'])
         tau_i = J_i.T@F_i
         contact_i = ca.Function('contact', [self.vars['q']], [tau_i], ['q'], ['tau_i'])
         self.contacts.append(contact_i)
