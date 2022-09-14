@@ -68,8 +68,8 @@ def optimize(states, inputs, param, disc_dyn):
     opts = {'expand':False,
             'ipopt.print_level':3}
 
-    #solver = ca.nlpsol('Solver', 'ipopt', nlp, opts)
-    solver = ca.nlpsol('solver', ''nlp, opts)
+    
+    solver = ca.nlpsol('solver', 'ipopt', nlp, opts)
 
     print('________________________________________')
     print(' ##### Optimizing offline params ######' )

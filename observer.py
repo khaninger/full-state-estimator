@@ -9,7 +9,7 @@ class ekf():
         
         self.x = {'q': q0,
                   'dq': ca.DM.zeros(q0.size)} # initial state
-
+        
         self.cov = np.diag(par['cov_init'])  # initial covariance
         self.proc_noise = np.diag(np.concatenate((par['proc_noise']['pos'],
                                                   par['proc_noise']['vel'])))

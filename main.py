@@ -107,13 +107,15 @@ def offline_observer_run(bag):
     msgs = bag_loader(bag, map_joint_state, topic_name = 'joint_state')
     observer = ekf(p, msgs['pos'][:,0])
 
-    states = []
-    inputs = []
-    for q, tau_err in zip(msgs['pos'].T, msgs['torque'].T):
-        res = observer.step(q = q, tau_err = tau_err)
-        states += [res['xi']]
-        inputs += [tau_err]
-    print('Finished producing state trajectory of length {}'.format(len(states)))
+    num_msgs = len(msgs['pos'].T)
+    
+    states = np.zeros((observer.dyn_sys.nx, num_msgs))
+    inputs = msgs['torque']
+    #for q, tau_err in zip(msgs['pos'].T, msgs['torque'].T):
+    for i in range(num_msgs):
+        res = observer.step(q = msgs['pos'][:,i], tau_err = msgs['torque'][:,i])
+        states[:,i] = res['xi'].flatten()
+    print('Finished producing state trajectory of length {}'.format(len(states.T)))
     return states, inputs
 
 def param_fit(states, inputs):
@@ -123,7 +125,7 @@ def param_fit(states, inputs):
     p = init_rosparams()
     
     rob = robot(p, p_to_opt)
-    optimized_par = optimize(states, inputs, p_to_opt, rob.disc_dyn)
+    optimized_par = optimize(states.T, inputs.T, p_to_opt, rob.disc_dyn)
     return optimized_par
     
 if __name__ == '__main__':

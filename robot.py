@@ -92,6 +92,7 @@ class robot():
         self.disc_dyn =  ca.Function('disc_dyn', fn_dict,
                                      ['xi', 'tau_err', *sym_par.keys()],
                                      ['xi_next'], self.jit_options)
+        
         self.build_A(h)
     
     def build_A(self, h):
