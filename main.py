@@ -84,10 +84,10 @@ class ros_observer():
         if not rospy.is_shutdown():
             self.joint_pub.publish(msg)
         x, dx, ddx = self.observer.dyn_sys.get_tcp_motion(self.x['q'], self.x['dq'], ddq)
-        #print('x: {}'.format(x[0]))
-        #msg_ee = build_jt_msg(x.full(), dx.full(), ddx)
-        #if not rospy.is_shutdown():
-        #    self.ee_pub.publish(msg_ee)     
+        #print('dx: {}'.format(dx))
+        msg_ee = build_jt_msg(x[0].full(), dx.full(), ddx.full())
+        if not rospy.is_shutdown():
+            self.ee_pub.publish(msg_ee)     
     
     def shutdown(self):
         print("Shutting down observer")

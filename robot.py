@@ -27,7 +27,7 @@ class robot():
         self.cmodel = cpin.Model(model)
         self.cdata = self.cmodel.createData()
         kindyn = pycasadi_kin_dyn.CasadiKinDyn(urdf)
-        self.fwd_kin  = ca.Function.deserialize(kindyn.fk('link_6'))
+        self.fwd_kin  = ca.Function.deserialize(kindyn.fk('gripper'))
         
         self.nq = model.nq
         self.nx = 2*model.nq
@@ -42,9 +42,8 @@ class robot():
         dq = self.vars['dq']
         
         x_ee = self.fwd_kin(q) # x is TCP pose as (pos, R), where pos is a 3-Vector and R a rotation matrix
-        #print(x_ee)
-        print("zeros {}".format(self.fwd_kin(np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0]))))
-        print("test  {}".format(self.fwd_kin(np.array([0.0, -np.pi, 0.0, 0.0, 0.0, 0.0]))))
+        #print("zeros {}".format(self.fwd_kin(np.array([0.0, 0.0, -np.pi/2, 0.0, 0.0, 0.0]))))
+        #print("test  {}".format(self.fwd_kin(np.array([0.0, 0, -np.pi/2, np.pi/2, 0.0, 0.0]))))
         #x_ee = cpin.forwardKinematics(self.cmodel, self.cdata, q) # x is TCP pose as (pos, R), where pos is a 3-Vector and R a rotation matrix
         J = ca.jacobian(x_ee[0], q)
         Jd = ca.jacobian(J.reshape((np.prod(J.shape),1)), q)@dq # Jacobian on a matrix is tricky so we make a vector
@@ -53,7 +52,7 @@ class robot():
         
         self.jac = ca.Function('jacobian', [q], [J], ['q'], ['Jac'])
         self.djac = ca.Function('dot_jacobian',  [q, dq], [Jd])
-
+        #print(self.jac(np.array([np.pi/2, 0.0, np.pi/2, 0.0, 0.0, 0.0])))
         self.d_fwd_kin = ca.Function('dx', [q, dq], [J@dq], ['q', 'dq'], ['dx'])
         self.dd_fwd_kin = ca.Function('ddx', [q, dq, self.vars['ddq']],
                                       [Jd + J@self.vars['ddq']],

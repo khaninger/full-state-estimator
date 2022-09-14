@@ -68,44 +68,44 @@
     <limit effort="10000.0" lower="-2.96705972839" upper="2.96705972839" velocity="6.98131700798"/>
   </joint>
   <joint name="joint_2" type="revolute">
-    <origin rpy="0.0 1.57 0.0" xyz="0.05 0.0 0.590"/>
+    <origin rpy="0.0 0.0 0.0" xyz="0.150 0.0 0.0"/>
     <parent link="link_1"/>
     <child link="link_2"/>
-    <axis xyz="0 -1  0"/>
+    <axis xyz="0 1 0"/>
     <limit effort="10000.0" lower="-1.4835298642" upper="2.35619449019" velocity="6.28318530718"/>
   </joint>
   <joint name="joint_3" type="revolute">
-    <origin rpy="0.0 -1.57 0.0" xyz="0.0 0.0 0.684"/>
+    <origin rpy="0.0 0.0 0.0" xyz="0.0 0.0 0.590"/>
     <parent link="link_2"/>
     <child link="link_3"/>
-    <axis xyz="0 -1  0"/>
+    <axis xyz="0 -1 0"/>
     <limit effort="10000.0" lower="-2.61799387799" upper="1.57079632679" velocity="6.98131700798"/>
   </joint>
   <joint name="joint_4" type="revolute">
-    <origin rpy="0 0 0" xyz="-0.049998 0 0.121"/>
+    <origin rpy="0 0 0" xyz="-0.130 0 0"/>
     <parent link="link_3"/>
     <child link="link_4"/>
-    <axis xyz="0  0 -1"/>
+    <axis xyz="0 0 -1"/>
     <limit effort="100.0" lower="-3.49065850399" upper="3.49065850399" velocity="8.72664625997"/>
   </joint>
   <joint name="joint_5" type="revolute">
-    <origin rpy="0 0 0" xyz="0 0 0.26494"/>
+    <origin rpy="0 0 0" xyz="0 0 0.684"/>
     <parent link="link_4"/>
     <child link="link_5"/>
-    <axis xyz="0 -1  0"/>
+    <axis xyz="0 1 0"/>
     <limit effort="10000.0" lower="-2.18166156499" upper="2.18166156499" velocity="8.72664625997"/>
   </joint>
   <joint name="joint_6" type="revolute">
-    <origin rpy="0 0 0" xyz="0 0 0.0665"/>
+    <origin rpy="0 0 0" xyz="0.0 0.0 0.1"/>
     <parent link="link_5"/>
     <child link="link_6"/>
-    <axis xyz="0  0 -1"/>
+    <axis xyz="0 0 -1"/>
     <limit effort="100.0" lower="-47.1238898038" upper="47.1238898038" velocity="13.962634016"/>
   </joint>
   <joint name="gripper_fixed" type="fixed">
     <parent link="link_6"/>
     <child link="gripper"/>
-    <origin rpy="3.1415926536 0.0 0.0" xyz="-0.101962 0.0 0.46533"/>
+    <origin rpy="0.0 0.0 0.0" xyz="0.0 0.0 0.0"/>
   </joint>
 
   <transmission name="$fixed_trans">
