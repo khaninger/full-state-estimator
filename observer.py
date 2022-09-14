@@ -30,6 +30,7 @@ class ekf():
         xi_corr = x_next['xi_next'] + L@(q - x_next['xi_next'][:self.dyn_sys.nq])
         self.x['q'] = xi_corr[:self.dyn_sys.nq].full()
         self.x['dq'] = xi_corr[self.dyn_sys.nq:].full()
+        self.x['xi'] = xi_corr.full()
         self.cov = (ca.DM.eye(self.dyn_sys.nx)-L@C)@cov_next
         return self.x
 

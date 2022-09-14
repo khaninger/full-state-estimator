@@ -8,14 +8,25 @@ def loss_fn(states, inputs, param, disc_dyn):
         disc_dyn is a function for next state as fn of state, input, param '''
     pred_state =  states[0]  # pred state will be the predicted next state based on dyn
     loss = 0
+    p = param
     for state, inp in zip(states, inputs):
         loss += ca.norm_2(state-pred_state)
-        pred_state = disc_dyn(prev_state, inp, param)
+        p['xi'] = state
+        p['tau_err'] = inp
+
+        pred_state = disc_dyn.call(p)['xi_next']
+
+    del p['xi']
+    del p['tau_err']
+    
     return loss
 
 def get_dec_vectors(param):
-    x = x0 = lbx = ubx = []
-    for k in param.get_keys():
+    x = []
+    x0 = []
+    lbx = []
+    ubx = []
+    for k in param.keys():
         x += [param[k]]
         if k == 'stiff':
             x0 += [ca.DM.zeros(3)]
@@ -29,10 +40,12 @@ def get_dec_vectors(param):
             x0 += [ca.DM.zeros(3)]
             lbx += [-0.2*ca.DM.ones(3)]
             ubx += [0.2*ca.DM.ones(3)]
+    print(x)
     x = ca.vertcat(*x)
     x0 = ca.vertcat(*x0)
     lbx = ca.vertcat(*lbx)
     ubx = ca.vertcat(*ubx)
+    return x, x0, lbx, ubx
 
 def package_results(res, param):
     res_dict = {}
@@ -47,13 +60,16 @@ def optimize(states, inputs, param, disc_dyn):
     loss = loss_fn(states, inputs, param, disc_dyn)
 
     x, x0, lbx, ubx = get_dec_vectors(param)
+    print(x)
+    print(x0)
     
     nlp = {'x':x, 'f': loss}
 
     opts = {'expand':False,
             'ipopt.print_level':3}
 
-    solver = ca.nlpsol('Solver', 'ipopt', nlp, opts)
+    #solver = ca.nlpsol('Solver', 'ipopt', nlp, opts)
+    solver = ca.nlpsol('solver', ''nlp, opts)
 
     print('________________________________________')
     print(' ##### Optimizing offline params ######' )

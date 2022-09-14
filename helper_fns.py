@@ -1,3 +1,4 @@
+import numpy as np
 import rosbag
 import rospy
 from sensor_msgs.msg import JointState

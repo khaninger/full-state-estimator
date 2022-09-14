@@ -9,7 +9,6 @@ from robot import robot
 from helper_fns import *
 from param_fit import *
 
-
 def init_rosparams():
     p = {}
     p['urdf_path'] = rospy.get_param('urdf_description', 'urdf/src/racer_description/urdf/racer7.urdf')
@@ -102,16 +101,19 @@ def start_node():
     rospy.on_shutdown(node.shutdown)  # Set shutdown to be executed when ROS exits
     rospy.spin()
 
-def offline_observer_run(bag):  
+def offline_observer_run(bag):
+    print('Starting offline observer from {}'.format(bag))
     p = init_rosparams()
-    observer = ekf(p)
-
     msgs = bag_loader(bag, map_joint_state, topic_name = 'joint_state')
+    observer = ekf(p, msgs['pos'][:,0])
+
     states = []
     inputs = []
-    for msg in msgs:
-        states += observer.step(q = msg['pos'], tau_err = msg['torque'])
-        inputs += msg['torque']
+    for q, tau_err in zip(msgs['pos'].T, msgs['torque'].T):
+        res = observer.step(q = q, tau_err = tau_err)
+        states += [res['xi']]
+        inputs += [tau_err]
+    print('Finished producing state trajectory of length {}'.format(len(states)))
     return states, inputs
 
 def param_fit(states, inputs):
@@ -121,7 +123,7 @@ def param_fit(states, inputs):
     p = init_rosparams()
     
     rob = robot(p, p_to_opt)
-    optimized_par = optimize(states, inputs, p, rob.disc_dyn)
+    optimized_par = optimize(states, inputs, p_to_opt, rob.disc_dyn)
     return optimized_par
     
 if __name__ == '__main__':
