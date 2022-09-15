@@ -9,19 +9,20 @@ class robot():
         Somewhat humerously, this class is stateless (e.g. the actual system state shouldn't be stored here).
     """
     def __init__(self, par, opt_par = {}, est_par = {}):
+        print("Building robot with contact pars: {}".format(par['contact_1']))
+        print("optimization pars: {}".format(opt_par))
+        print("estimation pars:   {}".format(est_par))
         self.contacts = []
+        self.contact_displacements = [] # signed distance functions
+        self.contact_pts = []
         self.vars = {}
         self.jit_options = {} #{'jit':True, 'compiler':'shell', "jit_options":{"compiler":"gcc", "flags": ["-O3"]}}
 
         self.load_kin_dyn(par['urdf'], par['urdf_path'])
-        self.build_fwd_kin(est_par)
+        self.build_vars(est_par)
+        self.build_fwd_kin()
 
-        self.np = 0
-        for v in est_par.values():
-            self.np += v.size()[0]
-        self.nx = 2*self.nq+self.np
-        self.ny = self.nq
-        
+        # Add contact model
         par['contact_1'].update(opt_par)
         par['contact_1'].update(est_par)
         self.add_contact(par['contact_1'])
@@ -33,6 +34,11 @@ class robot():
     def add_contact(self, contact_model):
         """ Add the contact_model to the robot """
         x_i = self.x_ee[0]+self.x_ee[1]@contact_model['pos']
+        cont_i = ca.Function('cont', [self.vars['q']], [x_i], ['q'], ['x_i'])
+        self.contact_pts.append(cont_i)
+        disp_i = ca.Function('disp',[self.vars['q']],
+                             [x_i - contact_model['rest']], ['q'],['xd'])
+        self.contact_displacements.append(disp_i)
         n_i = contact_model['stiff']/ca.norm_2(contact_model['stiff'])
         J_i = ca.jacobian(n_i.T@x_i, self.vars['q'])
         if isinstance(contact_model['stiff'], np.ndarray):
@@ -44,31 +50,40 @@ class robot():
         self.contacts.append(contact_i)
 
     def load_kin_dyn(self, urdf, urdf_path):
-        model = pin.buildModelFromUrdf(urdf_path)
+        model = pin.buildModelFromUrdf(urdf_path, verbose=True)
         data = model.createData()
-        self.cmodel = cpin.Model(model)
+        self.cmodel = cpin.Model(model, verbose = True)
         self.cdata = self.cmodel.createData()
         kindyn = pycasadi_kin_dyn.CasadiKinDyn(urdf)
-        self.fwd_kin  = ca.Function.deserialize(kindyn.fk('gripper'))
+        self.fwd_kin  = ca.Function.deserialize(kindyn.fk('link_6'))
         
         self.nq = model.nq
 
-    def build_fwd_kin(self, est_pars):
+    def build_vars(self, est_pars):
         self.vars['q'] = ca.SX.sym('q', self.nq)
         self.vars['dq'] = ca.SX.sym('dq', self.nq)
-        self.vars['p'] = est_pars.values()
-        print(self.vars['p'])
-        self.vars['xi'] = ca.vertcat(self.vars['q'], self.vars['dq'], *self.vars['p'])
+        self.vars['est_pars'] = ca.vertcat(*est_pars.values())
+        
+        self.vars['xi'] = ca.vertcat(self.vars['q'], self.vars['dq'], self.vars['est_pars'])
         self.vars['ddq']= ca.SX.sym('ddq', self.nq)
         self.vars['tau_err'] = ca.SX.sym('tau_err', self.nq)
+        
+        self.np = 0
+        for v in est_pars.values():
+            self.np += v.size()[0]
+        self.nx = 2*self.nq+self.np
+        self.ny = self.nq
+        
+    def build_fwd_kin(self):
         q = self.vars['q']
         dq = self.vars['dq']
         
-        self.x_ee = self.fwd_kin(q) # x is TCP pose as (pos, R), where pos is a 3-Vector and R a rotation matrix
+        #self.x_ee = self.fwd_kin(q) # x is TCP pose as (pos, R), where pos is a 3-Vector and R a rotation matrix
         #print("zeros {}".format(self.fwd_kin(np.array([0.0, 0.0, -np.pi/2, 0.0, 0.0, 0.0]))))
         #print("test  {}".format(self.fwd_kin(np.array([0.0, 0, -np.pi/2, np.pi/2, 0.0, 0.0]))))
 
-        #x_ee = cpin.forwardKinematics(self.cmodel, self.cdata, q) # x is TCP pose as (pos, R), where pos is a 3-Vector and R a rotation matrix
+        self.x_ee = cpin.forwardKinematics(self.cmodel, self.cdata, q, dq) # x is TCP pose as (pos, R), where pos is a 3-Vector and R a rotation matrix
+        print(self.x_ee)
         J = ca.jacobian(self.x_ee[0], q)
         Jd = ca.jacobian(J.reshape((np.prod(J.shape),1)), q)@dq # Jacobian on a matrix is tricky so we make a vector
         Jd = Jd.reshape(J.shape)@dq # then reshape the result into the right shape
@@ -88,22 +103,23 @@ class robot():
         tau_err = self.vars['tau_err']
 
         Minv = cpin.computeMinverse(self.cmodel, self.cdata, q)
-        tau_i = self.get_contact_forces(q, dq)
+        tau_i, disp, cont_pt = self.get_contact_forces(q, dq)
         tau_f = self.get_fric_forces(dq)
-                                
-        ddq =  Minv@(tau_err+tau_i+tau_f)
 
-        fn_dict = {'xi':self.vars['xi'], 'tau_err':tau_err, 'tau_i':tau_i}
+        ddq =  Minv@(tau_err+tau_i+tau_f)
+        
+        fn_dict = {'xi':self.vars['xi'], 'tau_err':tau_err,
+                   'disp':disp, 'cont_pt':cont_pt}
         fn_dict.update(opt_par)
         
         dq_next= dq + h*ddq
         q_next = q + h*dq_next
-        fn_dict['xi_next'] = ca.vertcat(q_next, dq_next, *self.vars['p'])
+        fn_dict['xi_next'] = ca.vertcat(q_next, dq_next, self.vars.get('est_pars', []))
         
         self.disc_dyn =  ca.Function('disc_dyn', fn_dict,
                                      ['xi', 'tau_err', *opt_par.keys()],
-                                     ['xi_next', 'tau_i'], self.jit_options).expand()
-        
+                                     ['xi_next', 'disp', 'cont_pt'], self.jit_options).expand()
+        print(self.disc_dyn)
         self.build_A(h)
     
     def build_A(self, h):
@@ -152,7 +168,15 @@ class robot():
         F = 0
         for con in self.contacts:
             F += con(q)
-        return F
+        disp = []
+        for d in self.contact_displacements:
+            disp.append(d(q))
+        disp = ca.vertcat(*disp)
+        cont_pt = []
+        for p in self.contact_pts:
+            cont_pt.append(p(q))
+        cont_pt = ca.vertcat(*cont_pt)
+        return F, disp, cont_pt
 
     def get_fric_forces(self, dq):
         return -dq*self.fric_model['visc']

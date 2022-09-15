@@ -11,7 +11,7 @@ from robot import robot
 from helper_fns import *
 from param_fit import *
 
-def init_rosparams(est_geom):
+def init_rosparams(est_geom = False):
     p = {}
     p['urdf_path'] = rospy.get_param('urdf_description', 'urdf/src/racer_description/urdf/racer7.urdf')
     p['urdf'] = rospy.get_param('robot_description')
@@ -54,7 +54,9 @@ class ros_observer():
 
         params = init_rosparams(est_geom)
         
-        self.observer = ekf(params, np.zeros(6), est_geom)#self.q)
+        self.observer = ekf(params,
+                            np.array([-0.23, 0.71, -1.33, 0.03, 1.10, 17.03]),
+                            est_geom)
 
 
     def joint_callback(self, msg):
@@ -112,13 +114,17 @@ def offline_observer_run(bag):
     num_msgs = len(msgs['pos'].T)
     
     states = np.zeros((observer.dyn_sys.nx, num_msgs))
+    contact_pts = np.zeros((3, num_msgs))
+    x_ees = []
     inputs = msgs['torque']
-
+    
     for i in range(num_msgs):
         res = observer.step(q = msgs['pos'][:,i], tau_err = msgs['torque'][:,i])
         states[:,i] = res['xi'].flatten()
+        contact_pts[:,i] = res['cont_pt'].flatten()
+        x_ees += [res['x_ee']]
     print('Finished producing state trajectory of length {}'.format(len(states.T)))
-    return states, inputs
+    return states, inputs, contact_pts, x_ees
 
 def param_fit(states, inputs):
     p_to_opt = {'pos':ca.SX.sym('pos',3),
@@ -130,13 +136,16 @@ def param_fit(states, inputs):
     optimized_par = optimize(states.T, inputs.T, p_to_opt, rob.disc_dyn)
     return optimized_par
 
-def generate_traj_and_fit():
-    if not exists('trajectory.pkl'):
-        states, inputs = offline_observer_run(args.opt_param_bag)
-        with open('trajectory.pkl', 'wb') as f:
-            pickle.dump((states, inputs), f)
-    with open('trajectory.pkl', 'rb') as f:
-        states, inputs = pickle.load(f)
+def generate_traj_and_fit(bag):
+    fname = bag[:-4]+'.pkl'
+    if not exists(fname):
+        states, inputs, contact_pts, x_ees = offline_observer_run(bag)
+        with open(fname, 'wb') as f:
+            pickle.dump((states, inputs, contact_pts, x_ees), f)
+    else:
+        print("Loading old trjaectory for param fit")
+    with open(fname, 'rb') as f:
+        states, inputs, _, _ = pickle.load(f)
     params = param_fit(states, inputs)
     for k,v in params.items():
         rospy.set_param('contact_1_'+k, v.full().tolist())
@@ -146,9 +155,12 @@ if __name__ == '__main__':
     parser.add_argument("--opt_param_bag", default="", help="Optimize params on this bag")
     parser.add_argument("--est_geom", default=False, action='store_true',
                         help="Estimate the contact geometry online")
+    parser.add_argument("--force_new_traj", default=False, action='store_true',
+                        help="Re-estimate the state trajectory")
+
     args = parser.parse_args()
 
     if args.opt_param_bag != "":
         print('Fitting parameters')
-        generate_traj_and_fit()
+        generate_traj_and_fit(args.opt_param_bag)
     start_node(est_geom = args.est_geom)

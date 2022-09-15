@@ -9,7 +9,7 @@ class ekf():
                   'dq': ca.DM.zeros(q0.size)} # initial state
 
         if est_geom:
-            est_par = {'contact_1_pose':ca.SX.sym('contact_1_pos',3)}
+            est_par = {'pos':ca.SX.sym('contact_1_pos',3)}
             self.x['p'] = ca.DM.zeros(3)
             self.dyn_sys = robot(par, est_par = est_par)
             self.proc_noise = np.diag(np.concatenate((par['proc_noise']['pos'],
@@ -26,7 +26,7 @@ class ekf():
         """ Steps the observer baed on the input at time t and observation at time t
             Standard EKF update, see, e.g. pg. 51 in Thrun "Probabilistic Robotics" """
         step_args = {'tau_err':tau_err,
-                     'xi':ca.vertcat(self.x['q'], self.x['dq'], self.x.get('p'))}
+                     'xi':ca.vertcat(self.x['q'], self.x['dq'], self.x.get('p', []))}
         x_next = self.dyn_sys.disc_dyn.call(step_args)  # predict state and output at next time step
         A, C = self.dyn_sys.get_linearized(step_args)   # get the linearized dynamics and observation matrices
         cov_next = A@self.cov@(A.T) + self.proc_noise
@@ -38,6 +38,10 @@ class ekf():
         self.x['q'] = xi_corr[:self.dyn_sys.nq].full()
         self.x['dq'] = xi_corr[self.dyn_sys.nq:2*self.dyn_sys.nq].full()
         self.x['p'] = xi_corr[2*self.dyn_sys.nq:].full()
+        self.x['cont_pt'] = x_next['cont_pt'].full()
+        x_ee = self.dyn_sys.fwd_kin(self.x['q'])
+        self.x['x_ee'] = (x_ee[0].full(),
+                          x_ee[1].full())
         self.x['xi'] = xi_corr.full()
         self.cov = (ca.DM.eye(self.dyn_sys.nx)-L@C)@cov_next
         return self.x
