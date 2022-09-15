@@ -28,9 +28,9 @@ def init_rosparams(est_geom = False):
     p['meas_noise'] = {'pos':np.array(rospy.get_param('meas_noise', [5e-2]*6))}
     
 
-    p['contact_1'] = {'pos': np.array(rospy.get_param('contact_1_pos', [0]*3)),
-                      'stiff': np.array(rospy.get_param('contact_1_stiff', [0]*3)),
-                      'rest': np.array(rospy.get_param('contact_1_rest', [0]*3))}        
+    p['contact_1'] = {'pos': ca.DM(rospy.get_param('contact_1_pos', [0]*3)),
+                      'stiff': ca.DM(rospy.get_param('contact_1_stiff', [0]*3)),
+                      'rest': ca.DM(rospy.get_param('contact_1_rest', [0.8, -0.7, 0.5]))}        
     return p
 
 class ros_observer():
@@ -105,8 +105,8 @@ def start_node(est_geom = False):
     rospy.on_shutdown(node.shutdown)  # Set shutdown to be executed when ROS exits
     rospy.spin()
 
-def offline_observer_run(bag):
-    print('Starting offline observer from {}'.format(bag))
+def generate_traj(bag):
+    print('Generating trajectory from {}'.format(bag))
     p = init_rosparams()
     msgs = bag_loader(bag, map_joint_state, topic_name = 'joint_state')
     observer = ekf(p, msgs['pos'][:,0])
@@ -123,44 +123,48 @@ def offline_observer_run(bag):
         states[:,i] = res['xi'].flatten()
         contact_pts[:,i] = res['cont_pt'].flatten()
         x_ees += [res['x_ee']]
-    print('Finished producing state trajectory of length {}'.format(len(states.T)))
-    return states, inputs, contact_pts, x_ees
 
-def param_fit(states, inputs):
-    p_to_opt = {'pos':ca.SX.sym('pos',3),
-                'stiff':ca.SX.sym('stiff',3),
-                'rest':ca.SX.sym('rest',3)}
-    p = init_rosparams()
+    fname = bag[:-4]+'.pkl'
+    with open(fname, 'wb') as f:
+        pickle.dump((states, inputs, contact_pts, x_ees), f)
+    print('Finished saving state trajectory of length {}'.format(len(states.T)))        
     
-    rob = robot(p, p_to_opt)
-    optimized_par = optimize(states.T, inputs.T, p_to_opt, rob.disc_dyn)
-    return optimized_par
-
-def generate_traj_and_fit(bag):
+def param_fit(bag):
     fname = bag[:-4]+'.pkl'
     if not exists(fname):
-        states, inputs, contact_pts, x_ees = offline_observer_run(bag)
-        with open(fname, 'wb') as f:
-            pickle.dump((states, inputs, contact_pts, x_ees), f)
-    else:
-        print("Loading old trjaectory for param fit")
+        generate_trajectory(bag)
+    print("Loading trjaectory for fitting params")
     with open(fname, 'rb') as f:
         states, inputs, _, _ = pickle.load(f)
-    params = param_fit(states, inputs)
-    for k,v in params.items():
+        
+    p_to_opt = {}
+    p_to_opt['pos'] = ca.SX.sym('pos',3)
+    p_to_opt['stiff'] = ca.SX.sym('stiff',3)
+    #p_to_opt['rest'] = ca.SX.sym('rest',3)
+    
+    p = init_rosparams()
+    rob = robot(p, p_to_opt)
+    optimized_par = optimize(states.T, inputs.T, p_to_opt, rob.disc_dyn)
+    for k,v in optimized_par.items():
         rospy.set_param('contact_1_'+k, v.full().tolist())
-            
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("--opt_param_bag", default="", help="Optimize params on this bag")
+    parser.add_argument("--bag", default="", help="Optimize params on this bag")
     parser.add_argument("--est_geom", default=False, action='store_true',
                         help="Estimate the contact geometry online")
-    parser.add_argument("--force_new_traj", default=False, action='store_true',
+    parser.add_argument("--opt_param", default=False, action='store_true',
+                        help="Optimize the parameters")
+    parser.add_argument("--new_traj", default=False, action='store_true',
                         help="Re-estimate the state trajectory")
 
     args = parser.parse_args()
 
-    if args.opt_param_bag != "":
-        print('Fitting parameters')
-        generate_traj_and_fit(args.opt_param_bag)
+    if args.new_traj:
+        if args.bag == "": rospy.signal_shutdown("Need bag to gen traj from")
+        generate_traj(args.bag)
+        
+    if args.opt_param != "":
+        param_fit(args.bag)
+        
     start_node(est_geom = args.est_geom)
