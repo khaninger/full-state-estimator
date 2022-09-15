@@ -50,9 +50,9 @@ class robot():
         self.contacts.append(contact_i)
 
     def load_kin_dyn(self, urdf, urdf_path):
-        model = pin.buildModelFromUrdf(urdf_path, verbose=True)
+        model = pin.buildModelsFromUrdf(urdf_path, verbose = True)[0]
         data = model.createData()
-        self.cmodel = cpin.Model(model, verbose = True)
+        self.cmodel = cpin.Model(model)
         self.cdata = self.cmodel.createData()
         kindyn = pycasadi_kin_dyn.CasadiKinDyn(urdf)
         self.fwd_kin  = ca.Function.deserialize(kindyn.fk('link_6'))
@@ -78,12 +78,12 @@ class robot():
         q = self.vars['q']
         dq = self.vars['dq']
         
-        #self.x_ee = self.fwd_kin(q) # x is TCP pose as (pos, R), where pos is a 3-Vector and R a rotation matrix
-        #print("zeros {}".format(self.fwd_kin(np.array([0.0, 0.0, -np.pi/2, 0.0, 0.0, 0.0]))))
-        #print("test  {}".format(self.fwd_kin(np.array([0.0, 0, -np.pi/2, np.pi/2, 0.0, 0.0]))))
+        self.x_ee = self.fwd_kin(q) # x is TCP pose as (pos, R), where pos is a 3-Vector and R a rotation matrix
+        print("zeros {}".format(self.fwd_kin(np.array([0.0, 0.0, -np.pi/2, 0.0, 0.0, 0.0]))))
+        print("test  {}".format(self.fwd_kin(np.array([0.0, 0, 0, 0, 0.0, 0.0]))))
 
-        self.x_ee = cpin.forwardKinematics(self.cmodel, self.cdata, q, dq) # x is TCP pose as (pos, R), where pos is a 3-Vector and R a rotation matrix
-        print(self.x_ee)
+        #self.x_ee = cpin.forwardKinematics(self.cmodel, self.cdata, q, dq) # x is TCP pose as (pos, R), where pos is a 3-Vector and R a rotation matrix
+        #print(self.x_ee)
         J = ca.jacobian(self.x_ee[0], q)
         Jd = ca.jacobian(J.reshape((np.prod(J.shape),1)), q)@dq # Jacobian on a matrix is tricky so we make a vector
         Jd = Jd.reshape(J.shape)@dq # then reshape the result into the right shape
