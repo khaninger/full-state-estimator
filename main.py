@@ -11,7 +11,7 @@ from robot import robot
 from helper_fns import *
 from param_fit import *
 
-def init_rosparams():
+def init_rosparams(est_geom):
     p = {}
     p['urdf_path'] = rospy.get_param('urdf_description', 'urdf/src/racer_description/urdf/racer7.urdf')
     p['urdf'] = rospy.get_param('robot_description')
@@ -21,8 +21,12 @@ def init_rosparams():
 
     p['proc_noise'] = {'pos':np.array(rospy.get_param('pos_noise', [1e-1]*6)),
                        'vel':np.array(rospy.get_param('vel_noise', [1e2]*6))}
-    p['meas_noise'] = {'pos':np.array(rospy.get_param('meas_noise', [5e-2]*6))}
     p['cov_init'] = np.array(rospy.get_param('cov_init', [1.]*12))
+    if est_geom:
+        p['proc_noise']['geom'] = np.array(rospy.get_param('geom_noise', [1]*3))
+        p['cov_init'] = np.append(p['cov_init'],[1.]*3)
+    p['meas_noise'] = {'pos':np.array(rospy.get_param('meas_noise', [5e-2]*6))}
+    
 
     p['contact_1'] = {'pos': np.array(rospy.get_param('contact_1_pos', [0]*3)),
                       'stiff': np.array(rospy.get_param('contact_1_stiff', [0]*3)),
@@ -32,7 +36,8 @@ def init_rosparams():
 class ros_observer():
     """ This handles the ros interface, loads models, etc
     """
-    def __init__(self, joint_topic = 'joint_state', force_topic = 'robot_state'):
+    def __init__(self, joint_topic = 'joint_state',
+                 force_topic = 'robot_state', est_geom = False):
         self.q = None        # joint position
         self.tau_err = None  # torque error
         self.F = None        # EE force
@@ -47,9 +52,9 @@ class ros_observer():
         self.ee_pub = rospy.Publisher('observer_ee',
                                       JointState, queue_size=1)
 
-        params = init_rosparams()
-                
-        self.observer = ekf(params, np.zeros(6))#self.q)
+        params = init_rosparams(est_geom)
+        
+        self.observer = ekf(params, np.zeros(6), est_geom)#self.q)
 
 
     def joint_callback(self, msg):
@@ -81,7 +86,7 @@ class ros_observer():
 
     def publish_state(self):
         ddq = self.x.get('ddq', np.zeros(self.observer.dyn_sys.nq))
-        msg = build_jt_msg(self.x['q'], self.x['dq'], ddq) 
+        msg = build_jt_msg(self.x['q'], self.x['dq'], self.x.get('p')) 
         if not rospy.is_shutdown():
             self.joint_pub.publish(msg)
         x, dx, ddx = self.observer.dyn_sys.get_tcp_motion(self.x['q'], self.x['dq'], ddq)
@@ -92,9 +97,9 @@ class ros_observer():
     def shutdown(self):
         print("Shutting down observer")
 
-def start_node():
+def start_node(est_geom = False):
     rospy.init_node('observer')
-    node = ros_observer()
+    node = ros_observer(est_geom = est_geom)
     rospy.on_shutdown(node.shutdown)  # Set shutdown to be executed when ROS exits
     rospy.spin()
 
@@ -108,7 +113,7 @@ def offline_observer_run(bag):
     
     states = np.zeros((observer.dyn_sys.nx, num_msgs))
     inputs = msgs['torque']
-    #for q, tau_err in zip(msgs['pos'].T, msgs['torque'].T):
+
     for i in range(num_msgs):
         res = observer.step(q = msgs['pos'][:,i], tau_err = msgs['torque'][:,i])
         states[:,i] = res['xi'].flatten()
@@ -124,21 +129,26 @@ def param_fit(states, inputs):
     rob = robot(p, p_to_opt)
     optimized_par = optimize(states.T, inputs.T, p_to_opt, rob.disc_dyn)
     return optimized_par
-    
+
+def generate_traj_and_fit():
+    if not exists('trajectory.pkl'):
+        states, inputs = offline_observer_run(args.opt_param_bag)
+        with open('trajectory.pkl', 'wb') as f:
+            pickle.dump((states, inputs), f)
+    with open('trajectory.pkl', 'rb') as f:
+        states, inputs = pickle.load(f)
+    params = param_fit(states, inputs)
+    for k,v in params.items():
+        rospy.set_param('contact_1_'+k, v.full().tolist())
+            
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--opt_param_bag", default="", help="Optimize params on this bag")
+    parser.add_argument("--est_geom", default=False, action='store_true',
+                        help="Estimate the contact geometry online")
     args = parser.parse_args()
 
     if args.opt_param_bag != "":
-        if not exists('trajectory.pkl'):
-            states, inputs = offline_observer_run(args.opt_param_bag)
-            with open('trajectory.pkl', 'wb') as f:
-                pickle.dump((states, inputs), f)
-        with open('trajectory.pkl', 'rb') as f:
-            states, inputs = pickle.load(f)
-        params = param_fit(states, inputs)
-        for k,v in params.items():
-            rospy.set_param('contact_1_'+k, v.full().tolist())
-    
-    start_node()
+        print('Fitting parameters')
+        generate_traj_and_fit()
+    start_node(est_geom = args.est_geom)

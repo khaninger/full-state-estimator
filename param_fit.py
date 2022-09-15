@@ -20,9 +20,6 @@ def loss_fn(states, inputs, param, disc_dyn, num_pts = 3500):
 
     del param['xi']
     del param['tau_err']
-
-    #for p in param.values():
-    #    loss += 0.001*ca.norm_2(p)
     
     return loss
 

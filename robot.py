@@ -8,19 +8,26 @@ class robot():
     """ This class handles the loading of robot dynamics/kinematics, the discretization/integration, and linearization
         Somewhat humerously, this class is stateless (e.g. the actual system state shouldn't be stored here).
     """
-    def __init__(self, par, sym_par = {}):
+    def __init__(self, par, opt_par = {}, est_par = {}):
         self.contacts = []
         self.vars = {}
         self.jit_options = {} #{'jit':True, 'compiler':'shell', "jit_options":{"compiler":"gcc", "flags": ["-O3"]}}
 
         self.load_kin_dyn(par['urdf'], par['urdf_path'])
-        self.build_fwd_kin()
+        self.build_fwd_kin(est_par)
 
-        par['contact_1'].update(sym_par)
+        self.np = 0
+        for v in est_par.values():
+            self.np += v.size()[0]
+        self.nx = 2*self.nq+self.np
+        self.ny = self.nq
+        
+        par['contact_1'].update(opt_par)
+        par['contact_1'].update(est_par)
         self.add_contact(par['contact_1'])
         self.fric_model = par['fric_model']
 
-        self.build_disc_dyn(par['h'], sym_par)
+        self.build_disc_dyn(par['h'], opt_par, est_par)
         self.build_output()
 
     def add_contact(self, contact_model):
@@ -45,13 +52,13 @@ class robot():
         self.fwd_kin  = ca.Function.deserialize(kindyn.fk('gripper'))
         
         self.nq = model.nq
-        self.nx = 2*model.nq
-        self.ny = model.nq  # eventually needs an udpate to include f/t 
 
-    def build_fwd_kin(self):
+    def build_fwd_kin(self, est_pars):
         self.vars['q'] = ca.SX.sym('q', self.nq)
         self.vars['dq'] = ca.SX.sym('dq', self.nq)
-        self.vars['xi'] = ca.vertcat(self.vars['q'], self.vars['dq'])
+        self.vars['p'] = est_pars.values()
+        print(self.vars['p'])
+        self.vars['xi'] = ca.vertcat(self.vars['q'], self.vars['dq'], *self.vars['p'])
         self.vars['ddq']= ca.SX.sym('ddq', self.nq)
         self.vars['tau_err'] = ca.SX.sym('tau_err', self.nq)
         q = self.vars['q']
@@ -75,7 +82,7 @@ class robot():
                                       [Jd + J@self.vars['ddq']],
                                       ['q', 'dq', 'ddq'], ['ddx'])
         
-    def build_disc_dyn(self, h, sym_par):
+    def build_disc_dyn(self, h, opt_par, est_par):
         q = self.vars['q']
         dq = self.vars['dq']
         tau_err = self.vars['tau_err']
@@ -87,13 +94,14 @@ class robot():
         ddq =  Minv@(tau_err+tau_i+tau_f)
 
         fn_dict = {'xi':self.vars['xi'], 'tau_err':tau_err, 'tau_i':tau_i}
-        fn_dict.update(sym_par)
+        fn_dict.update(opt_par)
+        
         dq_next= dq + h*ddq
         q_next = q + h*dq_next
-        fn_dict['xi_next'] = ca.vertcat(q_next, dq_next)
+        fn_dict['xi_next'] = ca.vertcat(q_next, dq_next, *self.vars['p'])
         
         self.disc_dyn =  ca.Function('disc_dyn', fn_dict,
-                                     ['xi', 'tau_err', *sym_par.keys()],
+                                     ['xi', 'tau_err', *opt_par.keys()],
                                      ['xi_next', 'tau_i'], self.jit_options).expand()
         
         self.build_A(h)
