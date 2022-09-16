@@ -11,7 +11,7 @@ from robot import robot
 from helper_fns import *
 from param_fit import *
 
-def init_rosparams(est_geom = False):
+def init_rosparams(est_geom = False, est_stiff = False):
     p = {}
     p['urdf_path'] = rospy.get_param('urdf_description', 'urdf/src/racer_description/urdf/racer7.urdf')
     p['urdf'] = rospy.get_param('robot_description')
@@ -23,10 +23,12 @@ def init_rosparams(est_geom = False):
                        'vel':np.array(rospy.get_param('vel_noise', [1e2]*6))}
     p['cov_init'] = np.array(rospy.get_param('cov_init', [1.]*12))
     if est_geom:
-        p['proc_noise']['geom'] = np.array(rospy.get_param('geom_noise', [1]*3))
-        p['cov_init'] = np.append(p['cov_init'],[1.]*3)
+        p['proc_noise']['geom'] = np.array(rospy.get_param('geom_noise', [1e1]*3))
+        p['cov_init'] = np.append(p['cov_init'],[1.5]*3)
+    if est_stiff:
+        p['proc_noise']['stiff'] = np.array(rospy.get_param('stiff_noise', [5e3]*3))
+        p['cov_init'] = np.append(p['cov_init'],[100]*3)
     p['meas_noise'] = {'pos':np.array(rospy.get_param('meas_noise', [5e-2]*6))}
-    
 
     p['contact_1'] = {'pos': ca.DM(rospy.get_param('contact_1_pos', [0]*3)),
                       'stiff': ca.DM(rospy.get_param('contact_1_stiff', [0]*3)),
@@ -37,7 +39,8 @@ class ros_observer():
     """ This handles the ros interface, loads models, etc
     """
     def __init__(self, joint_topic = 'joint_state',
-                 force_topic = 'robot_state', est_geom = False):
+                 force_topic = 'robot_state', est_geom = False, est_stiff = False):
+        
         self.q = None        # joint position
         self.tau_err = None  # torque error
         self.F = None        # EE force
@@ -52,11 +55,11 @@ class ros_observer():
         self.ee_pub = rospy.Publisher('observer_ee',
                                       JointState, queue_size=1)
 
-        params = init_rosparams(est_geom)
+        params = init_rosparams(est_geom, est_stiff)
         
         self.observer = ekf(params,
                             np.array([-0.23, 0.71, -1.33, 0.03, 1.10, 17.03]),
-                            est_geom)
+                            est_geom, est_stiff)
 
 
     def joint_callback(self, msg):
@@ -64,6 +67,7 @@ class ros_observer():
         try:
             self.q = np.array(msg.position)#/360*2*np.pi
             self.tau_err = np.array(msg.effort)
+
         except:
             print("Error loading ROS message in joint_callback")
         if hasattr(self, 'observer'):
@@ -77,18 +81,21 @@ class ros_observer():
             print("Error loading ROS message in force_callback")
 
     def observer_update(self):
-        try:
+        #try:
             self.x = self.observer.step(q = self.q,
                                         tau_err = self.tau_err,
                                         F = self.F)
-        except Exception as e:
-            print("Error in observer step")
-            print(e)
-            rospy.signal_shutdown("error in observer")
+            #print(self.x['stiff'])
+            #print(self.x['p'].T)
+        #except Exception as e:
+        #    print("Error in observer step")
+        #    print(e)
+        #    rospy.signal_shutdown("error in observer")
 
     def publish_state(self):
         ddq = self.x.get('ddq', np.zeros(self.observer.dyn_sys.nq))
-        msg = build_jt_msg(self.x['q'], self.x['dq'], self.x.get('p')) 
+        msg = build_jt_msg(self.x['q'], self.x['dq'],
+                           np.concatenate((self.x.get('stiff',[]), self.x.get('cont_pt', []))))
         if not rospy.is_shutdown():
             self.joint_pub.publish(msg)
         x, dx, ddx = self.observer.dyn_sys.get_tcp_motion(self.x['q'], self.x['dq'], ddq)
@@ -99,22 +106,23 @@ class ros_observer():
     def shutdown(self):
         print("Shutting down observer")
 
-def start_node(est_geom = False):
+def start_node(est_geom = False, est_stiff = False):
     rospy.init_node('observer')
-    node = ros_observer(est_geom = est_geom)
+    node = ros_observer(est_geom = est_geom, est_stiff = est_stiff)
     rospy.on_shutdown(node.shutdown)  # Set shutdown to be executed when ROS exits
     rospy.spin()
 
-def generate_traj(bag):
+def generate_traj(bag, est_geom = False, est_stiff = False):
     print('Generating trajectory from {}'.format(bag))
-    p = init_rosparams()
+    p = init_rosparams(est_geom, est_stiff)
     msgs = bag_loader(bag, map_joint_state, topic_name = 'joint_state')
-    observer = ekf(p, msgs['pos'][:,0])
+    observer = ekf(p, msgs['pos'][:,0], est_geom, est_stiff)
 
     num_msgs = len(msgs['pos'].T)
     
     states = np.zeros((observer.dyn_sys.nx, num_msgs))
     contact_pts = np.zeros((3, num_msgs))
+    stiff = np.zeros((3, num_msgs))
     x_ees = []
     inputs = msgs['torque']
     
@@ -122,11 +130,12 @@ def generate_traj(bag):
         res = observer.step(q = msgs['pos'][:,i], tau_err = msgs['torque'][:,i])
         states[:,i] = res['xi'].flatten()
         contact_pts[:,i] = res['cont_pt'].flatten()
+        stiff[:,i] = res.get('stiff',np.zeros(3)).flatten()
         x_ees += [res['x_ee']]
 
     fname = bag[:-4]+'.pkl'
     with open(fname, 'wb') as f:
-        pickle.dump((states, inputs, contact_pts, x_ees), f)
+        pickle.dump((states, inputs, contact_pts, x_ees, stiff), f)
     print('Finished saving state trajectory of length {}'.format(len(states.T)))        
     
 def param_fit(bag):
@@ -135,7 +144,7 @@ def param_fit(bag):
         generate_traj(bag)
     print("Loading trjaectory for fitting params")
     with open(fname, 'rb') as f:
-        states, inputs, _, _ = pickle.load(f)
+        states, inputs = pickle.load(f)[:2]
     
     p_to_opt = {}
     p_to_opt['pos'] = ca.SX.sym('pos',3)
@@ -153,6 +162,8 @@ if __name__ == '__main__':
     parser.add_argument("--bag", default="", help="Optimize params on this bag")
     parser.add_argument("--est_geom", default=False, action='store_true',
                         help="Estimate the contact geometry online")
+    parser.add_argument("--est_stiff", default=False, action='store_true',
+                        help="Estimate the contact stiffness online")
     parser.add_argument("--opt_param", default=False, action='store_true',
                         help="Optimize the parameters")
     parser.add_argument("--new_traj", default=False, action='store_true',
@@ -162,10 +173,10 @@ if __name__ == '__main__':
 
     if args.new_traj:
         if args.bag == "": rospy.signal_shutdown("Need bag to gen traj from")
-        generate_traj(args.bag)
+        generate_traj(args.bag, args.est_geom, args.est_stiff)
     elif args.opt_param:
         if args.bag == "": rospy.signal_shutdown("Need bag to optimize params from")
         param_fit(args.bag)
         generate_traj(args.bag)
     else:    
-        start_node(est_geom = args.est_geom)
+        start_node(est_geom = args.est_geom, est_stiff = args.est_stiff)

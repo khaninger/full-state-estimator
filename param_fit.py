@@ -20,7 +20,7 @@ def loss_fn(states, inputs, param, disc_dyn, num_pts = 3500):
         param['tau_err'] = inputs[i]
 
         res = disc_dyn.call(param)
-        loss += ca.norm_2(states[i+1][:6]-res['xi_next'][:6])
+        loss += ca.norm_2(states[i+1]-res['xi_next'])
         loss += 0.5*ca.norm_2(res['disp'])
         cont_pts_mean += res['cont_pt']/num_pts
         cont_pts += [res['cont_pt']]
@@ -29,7 +29,7 @@ def loss_fn(states, inputs, param, disc_dyn, num_pts = 3500):
     for c in cont_pts:
         c -= cont_pts_mean
         
-    loss += 1e-5*ca.sumsqr(ca.vertcat(*cont_pts))
+    #loss += 1e-5*ca.sumsqr(ca.vertcat(*cont_pts))
 
     del param['xi']
     del param['tau_err']

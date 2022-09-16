@@ -63,7 +63,7 @@ class robot():
         self.vars['q'] = ca.SX.sym('q', self.nq)
         self.vars['dq'] = ca.SX.sym('dq', self.nq)
         self.vars['est_pars'] = ca.vertcat(*est_pars.values())
-        
+
         self.vars['xi'] = ca.vertcat(self.vars['q'], self.vars['dq'], self.vars['est_pars'])
         self.vars['ddq']= ca.SX.sym('ddq', self.nq)
         self.vars['tau_err'] = ca.SX.sym('tau_err', self.nq)
@@ -133,6 +133,7 @@ class robot():
         res = self.disc_dyn.call(fn_dict)
 
         fn_dict['A'] = ca.jacobian(res['xi_next'], self.vars['xi'])
+        
         self.A_fn = ca.Function('A', fn_dict,  
                                 ['xi', 'tau_err'],['A'], self.jit_options).expand()
         '''
