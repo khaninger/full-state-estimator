@@ -132,15 +132,15 @@ def generate_traj(bag):
 def param_fit(bag):
     fname = bag[:-4]+'.pkl'
     if not exists(fname):
-        generate_trajectory(bag)
+        generate_traj(bag)
     print("Loading trjaectory for fitting params")
     with open(fname, 'rb') as f:
         states, inputs, _, _ = pickle.load(f)
-        
+    
     p_to_opt = {}
     p_to_opt['pos'] = ca.SX.sym('pos',3)
     p_to_opt['stiff'] = ca.SX.sym('stiff',3)
-    #p_to_opt['rest'] = ca.SX.sym('rest',3)
+    p_to_opt['rest'] = ca.SX.sym('rest',3)
     
     p = init_rosparams()
     rob = robot(p, p_to_opt)
@@ -163,8 +163,9 @@ if __name__ == '__main__':
     if args.new_traj:
         if args.bag == "": rospy.signal_shutdown("Need bag to gen traj from")
         generate_traj(args.bag)
-        
-    if args.opt_param != "":
+    elif args.opt_param:
+        if args.bag == "": rospy.signal_shutdown("Need bag to optimize params from")
         param_fit(args.bag)
-        
-    start_node(est_geom = args.est_geom)
+        generate_traj(args.bag)
+    else:    
+        start_node(est_geom = args.est_geom)

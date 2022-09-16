@@ -79,7 +79,7 @@ class robot():
         dq = self.vars['dq']
         
         self.x_ee = self.fwd_kin(q) # x is TCP pose as (pos, R), where pos is a 3-Vector and R a rotation matrix
-        #print("zeros {}".format(self.fwd_kin(np.array([0.0, 0.0, -np.pi/2, 0.0, 0.0, 0.0]))))
+        #print("zeros {}".format(self.fwd_kin(np.array([-0.7, 0.0, -np.pi/2, 0.0, 0.0, 0.0]))))
         #print("test  {}".format(self.fwd_kin(np.array([0.0, 0, 0, 0, 0.0, 0.0]))))
 
         #self.x_ee = cpin.forwardKinematics(self.cmodel, self.cdata, q, dq) # x is TCP pose as (pos, R), where pos is a 3-Vector and R a rotation matrix
@@ -119,7 +119,6 @@ class robot():
         self.disc_dyn =  ca.Function('disc_dyn', fn_dict,
                                      ['xi', 'tau_err', *opt_par.keys()],
                                      ['xi_next', 'disp', 'cont_pt'], self.jit_options).expand()
-        print(self.disc_dyn)
         self.build_A(h)
     
     def build_A(self, h):

@@ -20,12 +20,12 @@ def loss_fn(states, inputs, param, disc_dyn, num_pts = 3500):
         param['tau_err'] = inputs[i]
 
         res = disc_dyn.call(param)
-        #loss += ca.norm_2(states[i+1]-res['xi_next'])
-        #loss += 0.1*ca.norm_2(res['disp'])
+        loss += ca.norm_2(states[i+1][:6]-res['xi_next'][:6])
+        loss += 0.5*ca.norm_2(res['disp'])
         cont_pts_mean += res['cont_pt']/num_pts
         cont_pts += [res['cont_pt']]
 
-    print(cont_pts_mean)
+    
     for c in cont_pts:
         c -= cont_pts_mean
         
@@ -34,11 +34,11 @@ def loss_fn(states, inputs, param, disc_dyn, num_pts = 3500):
     del param['xi']
     del param['tau_err']
 
-    #for k,v in param.items():
-        #if k == 'stiff':
-        #    loss += 1e-9*v.T@v
-        #elif k == 'pos':
-        #    loss += 0.01*v.T@v
+    for k,v in param.items():
+        if k == 'stiff':
+            loss += 1e-9*v.T@v
+        elif k == 'pos':
+            loss += 50.0*v.T@v
     
     return loss
 
@@ -75,9 +75,9 @@ def get_dec_vectors(param):
             lbx += [ca.DM.zeros(3)]
             ubx += [1e6*ca.DM.ones(3)]
         if k == 'pos':
-            x0 += [ca.DM((0.0, 0.0, 0.3))]
-            lbx += [ca.DM((-0.5, -0.5, 0.1))]
-            ubx += [0.5*ca.DM.ones(3)]
+            x0 += [ca.DM((0.0, 0.0, 0.4))]
+            lbx += [ca.DM((-0.5, -0.5, 0.2))]
+            ubx += [ca.DM((0.5, 0.5, 0.8))]
         if k == 'rest':
             x0 += [ca.DM((1.1, -0.75, 0.5))]
             lbx += [-2*ca.DM.ones(3)]
