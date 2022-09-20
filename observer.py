@@ -34,11 +34,13 @@ class ekf():
                      'xi':ca.vertcat(self.x['q'], self.x['dq'],
                                      self.x.get('p', []),
                                      self.x.get('stiff', []))}
-        step_args['tau_err'][0] *= -1
-        step_args['tau_err'][2] *= -1
+        #step_args['tau_err'][0] *= -1
+        #step_args['tau_err'][1] *= -1
         x_next = self.dyn_sys.disc_dyn.call(step_args)  # predict state and output at next time step
         A, C = self.dyn_sys.get_linearized(step_args)   # get the linearized dynamics and observation matrices
 
+
+        print('F_i = {}'.format(self.dyn_sys.jac(self.x['q'])@step_args['tau_err']))
         #print(step_args['tau_err'])
         #print(q-x_next['xi_next'][:6])
         
