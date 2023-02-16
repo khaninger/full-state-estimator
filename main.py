@@ -13,7 +13,8 @@ from param_fit import *
 
 def init_rosparams(est_geom = False, est_stiff = False):
     p = {}
-    p['urdf_path'] = rospy.get_param('urdf_description', 'urdf/src/racer_description/urdf/racer7.urdf')
+    p['urdf_path'] = rospy.get_param('urdf_description', 'urdf/src/universal_robot/ur_description/urdf/ur16e.urdf')
+    #'urdf/src/racer_description/urdf/racer7.urdf')
     p['urdf'] = rospy.get_param('robot_description')
 
     p['fric_model']= {'visc':np.array(rospy.get_param('visc_fric', [0.2]*6))}
@@ -30,9 +31,9 @@ def init_rosparams(est_geom = False, est_stiff = False):
         p['cov_init'] = np.append(p['cov_init'],[100]*3)
     p['meas_noise'] = {'pos':np.array(rospy.get_param('meas_noise', [5e-2]*6))}
 
-    p['contact_1'] = {'pos': ca.DM(rospy.get_param('contact_1_pos', [0]*3)),
+    p['contact_1'] = {'pos':   ca.DM(rospy.get_param('contact_1_pos', [0]*3)),
                       'stiff': ca.DM(rospy.get_param('contact_1_stiff', [0]*3)),
-                      'rest': ca.DM(rospy.get_param('contact_1_rest', [0.8, -0.7, 0.5]))}        
+                      'rest':  ca.DM(rospy.get_param('contact_1_rest', [0.8, -0.7, 0.5]))}        
     return p
 
 class ros_observer():
