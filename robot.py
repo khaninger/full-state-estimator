@@ -101,16 +101,16 @@ class robot():
         tau_err = tau - cpin.computeGeneralizedGravity(self.cmodel, self.cdata, q)
 
         Minv = cpin.computeMinverse(self.cmodel, self.cdata, q)
+        
         tau_i, disp, cont_pt = self.get_contact_forces(q, dq)
         tau_f = -dq*self.fric_model['visc']
-
         ddq =  Minv@(tau_err+tau_i+tau_f)
 
-        mom = cpin.computeCentroidalMomnetum(self.cmodel, self.cdata, q, dq)
-        
+        M = cpin.crba(self.cmodel, self.cdata, q)
+        mom = M@dq
         fn_dict = {'xi':self.vars['xi'],
                    'tau':tau, 'tau_err':tau_err,
-                   'mom': mom
+                   'mom': mom,
                    'disp':disp, 'cont_pt':cont_pt}
         fn_dict.update(opt_par)
         
