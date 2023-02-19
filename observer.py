@@ -27,20 +27,18 @@ class ekf():
         self.cov = np.diag(par['cov_init'])  # initial covariance
         self.meas_noise = np.diag(par['meas_noise']['pos'])
 
-    def step(self, q, tau_err, F = None):
+    def step(self, q, tau, F = None):
         """ Steps the observer baed on the input at time t and observation at time t
             Standard EKF update, see, e.g. pg. 51 in Thrun "Probabilistic Robotics" """
-        step_args = {'tau_err':tau_err,
+        step_args = {'tau':tau,
                      'xi':ca.vertcat(self.x['q'], self.x['dq'],
                                      self.x.get('p', []),
                                      self.x.get('stiff', []))}
-        #step_args['tau_err'][0] *= -1
-        #step_args['tau_err'][1] *= -1
         x_next = self.dyn_sys.disc_dyn.call(step_args)  # predict state and output at next time step
         A, C = self.dyn_sys.get_linearized(step_args)   # get the linearized dynamics and observation matrices
-
-
-        print('F_i = {}'.format(self.dyn_sys.jac(self.x['q'])@step_args['tau_err']))
+        print(f"F_i = {self.dyn_sys.jacpinv(self.x['q']).T@step_args['tau']}")
+        #print(f"tau_err = {x_next['tau_err']}")
+        #print(f"tau     = {tau}")
         #print(step_args['tau_err'])
         #print(q-x_next['xi_next'][:6])
         
@@ -63,3 +61,23 @@ class ekf():
 
     def likelihood(self, obs):
         return NotImplemented
+
+class momentum_obs():
+    ''' Mostly following https://elib.dlr.de/129060/1/root.pdf '''
+    
+    def __init__(self, par, q0):
+        self.par = par
+        self.K = 20*np.eye(q0.size) # gain of momentum obs, dim N
+        self.x = {'q': q0,
+                  'dq': ca.DM.zeros(q0.size)} # initial state
+        self.p_last = np.zeros(q0.size)
+        self.r = np.zeros(q0.size)
+        
+    def step(self, q, tau, F = None):
+        step_args = {'tau':tau,
+                     'xi':ca.vertcat(self.x['q'], self.x['dq'])}
+        x_next = self.dyn_sys.disc_dyn.call(step_args)  # predict state and output at next time step        
+        
+        r += self.par['K']*(x_next['mom']-self.p_last-\
+                            self.par['h']*(x_next['tau_err']))
+        self.dyn_sys.jacpinv(self.x['q']).T@step_args['tau']

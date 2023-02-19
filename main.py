@@ -5,6 +5,7 @@ from os.path import exists
 import numpy as np
 import rospy
 from sensor_msgs.msg import JointState
+from geometry_msgs.msg import WrenchStamped
 
 from observer import ekf
 from robot import robot
@@ -14,7 +15,6 @@ from param_fit import *
 def init_rosparams(est_geom = False, est_stiff = False):
     p = {}
     p['urdf_path'] = rospy.get_param('urdf_description', 'urdf/src/universal_robot/ur_description/urdf/ur16e.urdf')
-    #'urdf/src/racer_description/urdf/racer7.urdf')
     p['urdf'] = rospy.get_param('robot_description')
 
     p['fric_model']= {'visc':np.array(rospy.get_param('visc_fric', [0.2]*6))}
@@ -33,23 +33,24 @@ def init_rosparams(est_geom = False, est_stiff = False):
 
     p['contact_1'] = {'pos':   ca.DM(rospy.get_param('contact_1_pos', [0]*3)),
                       'stiff': ca.DM(rospy.get_param('contact_1_stiff', [0]*3)),
-                      'rest':  ca.DM(rospy.get_param('contact_1_rest', [0.8, -0.7, 0.5]))}        
+                      'rest':  ca.DM(rospy.get_param('contact_1_rest', [-0.4, 0.3, 0.12]))}        
     return p
 
 class ros_observer():
     """ This handles the ros interface, loads models, etc
     """
-    def __init__(self, joint_topic = 'joint_state',
-                 force_topic = 'robot_state', est_geom = False, est_stiff = False):
+    def __init__(self, joint_topic = 'joint_states',
+                 force_topic = 'wrench', est_geom = False, est_stiff = False):
         
         self.q = None        # joint position
         self.tau_err = None  # torque error
+        self.tau = None      # motor torque
         self.F = None        # EE force
         self.x = None        # observer state
 
         self.joint_sub = rospy.Subscriber(joint_topic, JointState,
                                            self.joint_callback, queue_size=1)
-        self.force_sub = rospy.Subscriber(force_topic, JointState,
+        self.force_sub = rospy.Subscriber(force_topic, WrenchStamped,
                                           self.force_callback, queue_size=1)
         self.joint_pub = rospy.Publisher('observer_jt',
                                          JointState, queue_size=1)
@@ -67,8 +68,7 @@ class ros_observer():
         """ To be called when the joint_state topic is published with joint position and torques """
         try:
             self.q = np.array(msg.position)#/360*2*np.pi
-            self.tau_err = np.array(msg.effort)
-
+            self.tau = np.array(msg.effort)
         except:
             print("Error loading ROS message in joint_callback")
         if hasattr(self, 'observer'):
@@ -77,14 +77,15 @@ class ros_observer():
         
     def force_callback(self, msg):
         try:
-            self.F = msg.effort[:6]
+            self.F =  np.vstack((msg.wrench.force.x,  msg.wrench.force.y,  msg.wrench.force.z,
+                                 msg.wrench.torque.x, msg.wrench.torque.y, msg.wrench.torque.z))
         except:
             print("Error loading ROS message in force_callback")
 
     def observer_update(self):
         #try:
             self.x = self.observer.step(q = self.q,
-                                        tau_err = self.tau_err,
+                                        tau = self.tau,
                                         F = self.F)
             #print(self.x['stiff'])
             #print(self.x['p'].T)

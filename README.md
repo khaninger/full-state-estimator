@@ -19,4 +19,4 @@ You'll also need to grab the FindCASADI.cmake file from Casadi, put it in the cm
 
 # Starting
 source urdf/devel/setup.bash
-roslaunch racer_description racer.launch
+roslaunch racer_description racer.launch (or) roslaunch ur_description load_ur16e.launch
