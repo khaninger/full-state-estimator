@@ -16,6 +16,14 @@ def init_rosparams(est_geom = False, est_stiff = False):
     p = {}
     p['urdf_path'] = rospy.get_param('urdf_description', 'urdf/src/universal_robot/ur_description/urdf/ur16e.urdf')
     p['urdf'] = rospy.get_param('robot_description')
+    # Motor params for ur16, found in .ur_control for joint sizes 4,4,3,2,2,2
+    p['gearratio'] = np.array(rospy.get_param('gearratio', [101, 101, 101, 54, 54, 54 ])) 
+    p['torque_constant'] = np.array(rospy.get_param('torque_constant',
+                                                    [0.11968, 0.11968, 0.098322,
+                                                     0.10756, 0.10756, 0.10756 ]))
+    p['joint_names'] = [ 'shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_joint',
+                         'wrist_1_joint', 'wrist_2_joint', 'wrist_3_joint']
+
 
     p['fric_model']= {'visc':np.array(rospy.get_param('visc_fric', [0.2]*6))}
     p['h'] = rospy.get_param('obs_rate', 1./475.)
@@ -57,9 +65,9 @@ class ros_observer():
         self.ee_pub = rospy.Publisher('observer_ee',
                                       JointState, queue_size=1)
 
-        params = init_rosparams(est_geom, est_stiff)
+        self.params = init_rosparams(est_geom, est_stiff)
         
-        self.observer = ekf(params,
+        self.observer = ekf(self.params,
                             np.array([-0.23, 0.71, -1.33, 0.03, 1.10, 17.03]),
                             est_geom, est_stiff)
 
@@ -67,14 +75,22 @@ class ros_observer():
     def joint_callback(self, msg):
         """ To be called when the joint_state topic is published with joint position and torques """
         try:
-            self.q = np.array(msg.position)#/360*2*np.pi
-            self.tau = np.array(msg.effort)
+            q = []
+            current = []
+            for jt_name in self.params['joint_names']:
+                ind = msg.name.index(jt_name)
+                q.append(msg.position[ind])
+                current.append(msg.effort[ind])
+            self.q = np.array(q)
+            current = np.array(current)
+            motor_torque = current*self.params['torque_constant']
+            self.tau = motor_torque*self.params['gearratio']
         except:
             print("Error loading ROS message in joint_callback")
         if hasattr(self, 'observer'):
             self.observer_update()
             self.publish_state()
-        
+
     def force_callback(self, msg):
         try:
             self.F =  np.vstack((msg.wrench.force.x,  msg.wrench.force.y,  msg.wrench.force.z,

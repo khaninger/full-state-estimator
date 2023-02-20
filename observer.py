@@ -37,7 +37,7 @@ class ekf():
         x_next = self.dyn_sys.disc_dyn.call(step_args)  # predict state and output at next time step
         A, C = self.dyn_sys.get_linearized(step_args)   # get the linearized dynamics and observation matrices
         #print(f"F_i = {self.dyn_sys.jacpinv(self.x['q']).T@step_args['tau']}")
-        #print(f"tau_err = {x_next['tau_err']}")
+        print(f"tau_err = {x_next['tau_err']}")
         #print(f"tau     = {tau}")
         #print(step_args['tau_err'])
         #print(q-x_next['xi_next'][:6])
