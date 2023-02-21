@@ -77,6 +77,7 @@ class ros_observer():
     def joint_callback(self, msg):
         """ To be called when the joint_state topic is published with joint position and torques """
         try:
+            q, _, current = map_ur_joint_state(msg)
             self.q = np.array(q)
             current = np.array(current)
             motor_torque = current*self.params['torque_constant']
@@ -110,7 +111,7 @@ class ros_observer():
         ddq = self.x.get('ddq', np.zeros(self.observer.dyn_sys.nq))
         msg = build_jt_msg(self.x['q'], self.x['dq'],
                            np.concatenate((self.x.get('stiff',[]), self.x.get('cont_pt', []))))
-        msg_f = build_jt_msg(q = None, dq = self.x['f_ee_mo'], tau = self.x['f_ee_obs']) 
+        msg_f = build_jt_msg(q = self.x['f_ee_mo'], tau = self.x['f_ee_obs']) 
         if not rospy.is_shutdown():
             self.joint_pub.publish(msg)
             self.f_ee_obs_pub.publish(msg_f)
@@ -159,8 +160,8 @@ def generate_traj(bag, est_geom = False, est_stiff = False):
     fname = bag[:-4]+'.pkl'
     with open(fname, 'wb') as f:
         pickle.dump((states, inputs, contact_pts, x_ees, stiff, f_ee_mo, f_ee_obs, force['force']), f)
-    print('Finished saving state trajectory of length {}'.format(len(states.T)))        
-    
+    print('Finished saving state trajectory of length {}'.format(len(states.T)))
+
 def param_fit(bag):
     fname = bag[:-4]+'.pkl'
     if not exists(fname):
@@ -168,12 +169,12 @@ def param_fit(bag):
     print("Loading trjaectory for fitting params")
     with open(fname, 'rb') as f:
         states, inputs = pickle.load(f)[:2]
-    
+
     p_to_opt = {}
     p_to_opt['pos'] = ca.SX.sym('pos',3)
     p_to_opt['stiff'] = ca.SX.sym('stiff',3)
     p_to_opt['rest'] = ca.SX.sym('rest',3)
-    
+
     p = init_rosparams()
     rob = robot(p, p_to_opt)
     optimized_par = optimize(states.T, inputs.T, p_to_opt, rob.disc_dyn)
@@ -201,5 +202,5 @@ if __name__ == '__main__':
         if args.bag == "": rospy.signal_shutdown("Need bag to optimize params from")
         param_fit(args.bag)
         generate_traj(args.bag)
-    else:    
+    else:
         start_node(est_geom = args.est_geom, est_stiff = args.est_stiff)

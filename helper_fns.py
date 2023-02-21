@@ -3,7 +3,7 @@ import rosbag
 import rospy
 from sensor_msgs.msg import JointState
 
-def build_jt_msg(q = None, dq = None, tau = None):
+def build_jt_msg(q, dq = [], tau = []):
     msg = JointState()
     msg.header.stamp = rospy.Time.now()
     msg.position = q
