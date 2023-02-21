@@ -17,7 +17,7 @@ class ekf():
         if est_stiff:
             est_par = {'stiff':ca.SX.sym('contact_1_stiff',3)}
             self.x['stiff'] = 1000*ca.DM.ones(3)
-        
+
         self.dyn_sys = robot(par, est_par = est_par)
         self.proc_noise = np.diag(np.concatenate((par['proc_noise']['pos'],
                                                   par['proc_noise']['vel'],
@@ -41,7 +41,7 @@ class ekf():
         #print(f"tau     = {tau}")
         #print(step_args['tau_err'])
         #print(q-x_next['xi_next'][:6])
-        
+
         cov_next = A@self.cov@(A.T) + self.proc_noise
         L = cov_next@C.T@ca.inv(C@cov_next@(C.T) + self.meas_noise) # calculate Kalman gain
         if np.any(np.isnan(L)):
