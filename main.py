@@ -41,7 +41,7 @@ def init_rosparams(est_geom = False, est_stiff = False):
 
     p['contact_1'] = {'pos':   ca.DM(rospy.get_param('contact_1_pos', [0]*3)),
                       'stiff': ca.DM(rospy.get_param('contact_1_stiff', [0]*3)),
-                      'rest':  ca.DM(rospy.get_param('contact_1_rest', [-0.4, 0.3, 0.12]))}        
+                      'rest':  ca.DM(rospy.get_param('contact_1_rest', [-0.4, 0.3, 0.12]))}
     return p
 
 class ros_observer():
@@ -118,8 +118,7 @@ class ros_observer():
         x, dx, ddx = self.observer.dyn_sys.get_tcp_motion(self.x['q'], self.x['dq'], ddq)
         msg_ee = build_jt_msg(x[0].full(), dx.full(), ddx.full())
         if not rospy.is_shutdown():
-            self.ee_pub.publish(msg_ee)     
-    
+            self.ee_pub.publish(msg_ee)
     def shutdown(self):
         print("Shutting down observer")
 
