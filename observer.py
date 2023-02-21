@@ -36,8 +36,8 @@ class ekf():
                                      self.x.get('stiff', []))}
         x_next = self.dyn_sys.disc_dyn.call(step_args)  # predict state and output at next time step
         A, C = self.dyn_sys.get_linearized(step_args)   # get the linearized dynamics and observation matrices
-        #print(f"F_i = {self.dyn_sys.jacpinv(self.x['q']).T@step_args['tau']}")
-        print(f"tau_err = {x_next['tau_err']}")
+        #print(f"F_i = {self.dyn_sys.jacpinv(self.x['q']).T@x_next['tau_err']}")
+        #print(f"tau_err = {x_next['tau_err']}")
         #print(f"tau     = {tau}")
         #print(step_args['tau_err'])
         #print(q-x_next['xi_next'][:6])
@@ -56,6 +56,8 @@ class ekf():
         self.x['x_ee'] = (x_ee[0].full(),
                           x_ee[1].full())
         self.x['xi'] = xi_corr.full()
+        self.x['f_ee_mo'] =  (self.dyn_sys.jacpinv(self.x['q'])@x_next['tau_err']).full()
+        self.x['f_ee_obs'] = (self.dyn_sys.jacpinv(self.x['q'])@x_next['tau_i']).full()
         self.cov = (ca.DM.eye(self.dyn_sys.nx)-L@C)@cov_next
         return self.x
 

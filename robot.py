@@ -85,7 +85,7 @@ class robot():
         #Jd = cpin.computeForwardKinematicsDerivatives(self.cmodel, self.cdata, q, dq)
         
         self.jac = ca.Function('jacobian', [q], [J], ['q'], ['Jac'])
-        self.jacpinv = ca.Function('jac_pinv', [q], [ca.pinv(J)], ['q'], ['pinv']) 
+        self.jacpinv = ca.Function('jac_pinv', [q], [ca.pinv(J.T)], ['q'], ['pinv']) 
         self.djac = ca.Function('dot_jacobian',  [q, dq], [Jd])
         
         self.d_fwd_kin = ca.Function('dx', [q, dq], [J@dq], ['q', 'dq'], ['dx'])
@@ -110,7 +110,7 @@ class robot():
         mom = M@dq
         fn_dict = {'xi':self.vars['xi'],
                    'tau':tau, 'tau_err':tau_err,
-                   'mom': mom,
+                   'tau_i': tau_i, 'mom': mom,
                    'disp':disp, 'cont_pt':cont_pt}
         fn_dict.update(opt_par)
         
@@ -120,7 +120,7 @@ class robot():
         
         self.disc_dyn =  ca.Function('disc_dyn', fn_dict,
                                      ['xi', 'tau', *opt_par.keys()],
-                                     ['xi_next', 'disp', 'cont_pt', 'tau_err', 'mom'], self.jit_options).expand()
+                                     ['xi_next', 'disp', 'cont_pt', 'tau_i', 'tau_err', 'mom'], self.jit_options).expand()
         self.build_lin_matrices(h)
     
     def build_lin_matrices(self, h):

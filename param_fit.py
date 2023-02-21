@@ -2,7 +2,7 @@ import numpy as np
 import casadi as ca
 import time
 
-def loss_fn(states, inputs, param, disc_dyn, num_pts = 3500):
+def loss_fn(states, inputs, param, disc_dyn, num_pts = 2000):
     ''' States is a trajectory as list.
         Param are the parameters to optimize
         disc_dyn is a function for next state as fn of state, input, param '''
@@ -17,7 +17,7 @@ def loss_fn(states, inputs, param, disc_dyn, num_pts = 3500):
     cont_pts_mean = ca.DM((0,0,0))
     for i in range(0, len(states)-1, skip_size):
         param['xi'] = states[i]
-        param['tau_err'] = inputs[i]
+        param['tau'] = inputs[i]
 
         res = disc_dyn.call(param)
         loss += ca.norm_2(states[i+1]-res['xi_next'])
@@ -32,7 +32,7 @@ def loss_fn(states, inputs, param, disc_dyn, num_pts = 3500):
     #loss += 1e-5*ca.sumsqr(ca.vertcat(*cont_pts))
 
     del param['xi']
-    del param['tau_err']
+    del param['tau']
 
     for k,v in param.items():
         if k == 'stiff':
@@ -49,14 +49,14 @@ def validate(states, inputs, param, disc_dyn, num_pts = 3500):
     displacement = 0.0
     for i in range(0, len(states)-1):
         param['xi'] = states[i]
-        param['tau_err'] = inputs[i]
+        param['tau'] = inputs[i]
 
         res = disc_dyn.call(param)
         state_err += ca.norm_2(states[i+1]-res['xi_next'])
         displacement += ca.norm_2(res['disp'])
 
     del param['xi']
-    del param['tau_err']
+    del param['tau']
 
     print("At param values {}".format(param))
     print("State err: {}".format(state_err/len(states)))
@@ -123,7 +123,7 @@ def optimize(states, inputs, param, disc_dyn):
     print("Final obj:  {}".format(obj))
 
     validate(states, inputs, res_dict, disc_dyn)
-    #print("Fit param:  {}".format(res_dict))
+    print("Fit param:  {}".format(res_dict))
 
     return res_dict
 

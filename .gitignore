@@ -1,6 +1,6 @@
 urdf/build
 urdf/devel
-__pycache__
+__pycache__/*
 .#*
 *.so
 *.o

@@ -64,6 +64,8 @@ class ros_observer():
                                          JointState, queue_size=1)
         self.ee_pub = rospy.Publisher('observer_ee',
                                       JointState, queue_size=1)
+        self.f_ee_obs_pub = rospy.Publisher('force_ee_obs', JointState, queue_size=1)
+        self.f_ee_mo_pub  = rospy.Publisher('force_ee_mo',  JointState, queue_size=1)
 
         self.params = init_rosparams(est_geom, est_stiff)
         
@@ -75,12 +77,6 @@ class ros_observer():
     def joint_callback(self, msg):
         """ To be called when the joint_state topic is published with joint position and torques """
         try:
-            q = []
-            current = []
-            for jt_name in self.params['joint_names']:
-                ind = msg.name.index(jt_name)
-                q.append(msg.position[ind])
-                current.append(msg.effort[ind])
             self.q = np.array(q)
             current = np.array(current)
             motor_torque = current*self.params['torque_constant']
@@ -114,8 +110,10 @@ class ros_observer():
         ddq = self.x.get('ddq', np.zeros(self.observer.dyn_sys.nq))
         msg = build_jt_msg(self.x['q'], self.x['dq'],
                            np.concatenate((self.x.get('stiff',[]), self.x.get('cont_pt', []))))
+        msg_f = build_jt_msg(q = None, dq = self.x['f_ee_mo'], tau = self.x['f_ee_obs']) 
         if not rospy.is_shutdown():
             self.joint_pub.publish(msg)
+            self.f_ee_obs_pub.publish(msg_f)
         x, dx, ddx = self.observer.dyn_sys.get_tcp_motion(self.x['q'], self.x['dq'], ddq)
         msg_ee = build_jt_msg(x[0].full(), dx.full(), ddx.full())
         if not rospy.is_shutdown():
@@ -133,7 +131,10 @@ def start_node(est_geom = False, est_stiff = False):
 def generate_traj(bag, est_geom = False, est_stiff = False):
     print('Generating trajectory from {}'.format(bag))
     p = init_rosparams(est_geom, est_stiff)
-    msgs = bag_loader(bag, map_joint_state, topic_name = 'joint_state')
+    msgs = bag_loader(bag, map_joint_state, topic_name = 'joint_states')
+    force_unaligned = bag_loader(bag, map_wrench, topic_name = 'wrench')
+    force = get_aligned_msgs(msgs, force_unaligned)
+    
     observer = ekf(p, msgs['pos'][:,0], est_geom, est_stiff)
 
     num_msgs = len(msgs['pos'].T)
@@ -141,19 +142,23 @@ def generate_traj(bag, est_geom = False, est_stiff = False):
     states = np.zeros((observer.dyn_sys.nx, num_msgs))
     contact_pts = np.zeros((3, num_msgs))
     stiff = np.zeros((3, num_msgs))
+    f_ee_mo = np.zeros((3, num_msgs))
+    f_ee_obs = np.zeros((3, num_msgs))
     x_ees = []
     inputs = msgs['torque']
     
     for i in range(num_msgs):
-        res = observer.step(q = msgs['pos'][:,i], tau_err = msgs['torque'][:,i])
+        res = observer.step(q = msgs['pos'][:,i], tau = msgs['torque'][:,i])
         states[:,i] = res['xi'].flatten()
         contact_pts[:,i] = res['cont_pt'].flatten()
         stiff[:,i] = res.get('stiff',np.zeros(3)).flatten()
+        f_ee_mo[:,i] = res['f_ee_mo'].flatten()
+        f_ee_obs[:,i] = res['f_ee_obs'].flatten()
         x_ees += [res['x_ee']]
 
     fname = bag[:-4]+'.pkl'
     with open(fname, 'wb') as f:
-        pickle.dump((states, inputs, contact_pts, x_ees, stiff), f)
+        pickle.dump((states, inputs, contact_pts, x_ees, stiff, f_ee_mo, f_ee_obs, force['force']), f)
     print('Finished saving state trajectory of length {}'.format(len(states.T)))        
     
 def param_fit(bag):
