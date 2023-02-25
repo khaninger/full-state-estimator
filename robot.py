@@ -42,9 +42,9 @@ class robot():
         n_i = contact_model['stiff']/ca.norm_2(contact_model['stiff'])
         J_i = ca.jacobian(n_i.T@x_i, self.vars['q'])
         if isinstance(contact_model['stiff'], np.ndarray):
-            F_i = ca.DM(contact_model['stiff']).T@(x_i - contact_model['rest'])
+            F_i = ca.DM(contact_model['stiff']).T@(x_i-contact_model['rest'])
         else:
-            F_i = contact_model['stiff'].T@(x_i - contact_model['rest'])
+            F_i = contact_model['stiff'].T@(x_i-contact_model['rest'])
         tau_i = J_i.T@F_i
         contact_i = ca.Function('contact', [self.vars['q']], [tau_i], ['q'], ['tau_i'])
         self.contacts.append(contact_i)
@@ -104,7 +104,7 @@ class robot():
         
         tau_i, disp, cont_pt = self.get_contact_forces(q, dq)
         tau_f = -dq*self.fric_model['visc']
-        ddq =  Minv@(tau_err+tau_i+tau_f)
+        ddq =  Minv@(tau_err+tau_i)#+tau_f)
 
         M = cpin.crba(self.cmodel, self.cdata, q)
         mom = M@dq
@@ -113,8 +113,10 @@ class robot():
                    'tau_i': tau_i, 'mom': mom,
                    'disp':disp, 'cont_pt':cont_pt}
         fn_dict.update(opt_par)
+
+        semiimplicit = (ca.DM.eye(self.nq)+h*Minv@ca.diag(self.fric_model['visc']))
         
-        dq_next= dq + h*ddq
+        dq_next= ca.inv(semiimplicit)@(dq + h*ddq)
         q_next = q + h*dq_next
         fn_dict['xi_next'] = ca.vertcat(q_next, dq_next, self.vars.get('est_pars', []))
         
@@ -166,9 +168,9 @@ class robot():
             q: joint pose
             dq: joint velocity
         """
-        F = 0
+        tau = 0
         for con in self.contacts:
-            F += con(q)
+            tau += con(q)
         disp = []
         for d in self.contact_displacements:
             disp.append(d(q))
@@ -177,4 +179,4 @@ class robot():
         for p in self.contact_pts:
             cont_pt.append(p(q))
         cont_pt = ca.vertcat(*cont_pt)
-        return F, disp, cont_pt
+        return tau, disp, cont_pt

@@ -20,3 +20,5 @@ You'll also need to grab the FindCASADI.cmake file from Casadi, put it in the cm
 # Starting
 source urdf/devel/setup.bash
 roslaunch racer_description racer.launch (or) roslaunch ur_description load_ur16e.launch
+
+Optimize parameters with python3 main.py --opt_param --bag [bagname]. The optimized parameters are set as rosparams

@@ -2,7 +2,7 @@ import numpy as np
 import casadi as ca
 import time
 
-def loss_fn(states, inputs, param, disc_dyn, num_pts = 2000):
+def loss_fn(states, inputs, param, disc_dyn, prediction_skip = 1, num_pts = 2000):
     ''' States is a trajectory as list.
         Param are the parameters to optimize
         disc_dyn is a function for next state as fn of state, input, param '''
@@ -15,17 +15,16 @@ def loss_fn(states, inputs, param, disc_dyn, num_pts = 2000):
 
     cont_pts = []
     cont_pts_mean = ca.DM((0,0,0))
-    for i in range(0, len(states)-1, skip_size):
+    for i in range(0, len(states)-prediction_skip, skip_size):
         param['xi'] = states[i]
         param['tau'] = inputs[i]
 
         res = disc_dyn.call(param)
-        loss += ca.norm_2(states[i+1]-res['xi_next'])
-        loss += 0.5*ca.norm_2(res['disp'])
+        loss += ca.norm_2(states[i+prediction_skip]-res['xi_next'])
+        loss += 0.1*ca.norm_2(res['disp'])
         cont_pts_mean += res['cont_pt']/num_pts
         cont_pts += [res['cont_pt']]
 
-    
     for c in cont_pts:
         c -= cont_pts_mean
         
@@ -36,10 +35,9 @@ def loss_fn(states, inputs, param, disc_dyn, num_pts = 2000):
 
     for k,v in param.items():
         if k == 'stiff':
-            loss += 1e-9*v.T@v
+            loss += 1e-10*ca.norm_1(v)
         elif k == 'pos':
             loss += 50.0*v.T@v
-    
     return loss
 
 def validate(states, inputs, param, disc_dyn, num_pts = 3500):
@@ -61,7 +59,6 @@ def validate(states, inputs, param, disc_dyn, num_pts = 3500):
     print("At param values {}".format(param))
     print("State err: {}".format(state_err/len(states)))
     print("Contact displacement: {}".format(displacement/len(states)))
-    
 
 def get_dec_vectors(param):
     x = []
@@ -71,15 +68,15 @@ def get_dec_vectors(param):
     for k in param.keys():
         x += [param[k]]
         if k == 'stiff':
-            x0 += [0.0001*ca.DM.ones(3)]
+            x0 += [0.1*ca.DM.ones(3)]
             lbx += [ca.DM.zeros(3)]
             ubx += [1e6*ca.DM.ones(3)]
         if k == 'pos':
-            x0 += [ca.DM((0.0, 0.0, 0.4))]
-            lbx += [ca.DM((-0.5, -0.5, 0.2))]
-            ubx += [ca.DM((0.5, 0.5, 0.8))]
+            x0 += [ca.DM((0.0, 0.0, 0.0))]
+            lbx += [ca.DM((-0.5, -0.5, 0.0))]
+            ubx += [ca.DM((0.5, 0.5, 0.6))]
         if k == 'rest':
-            x0 += [ca.DM((1.1, -0.75, 0.5))]
+            x0 += [ca.DM((-0.5, 0.3, 0.2))]
             lbx += [-2*ca.DM.ones(3)]
             ubx += [2*ca.DM.ones(3)]
     x = ca.vertcat(*x)
@@ -97,8 +94,8 @@ def package_results(res, param):
         read_pos += v_size
     return res_dict
 
-def optimize(states, inputs, param, disc_dyn):
-    loss = loss_fn(states, inputs, param, disc_dyn)
+def optimize(states, inputs, param, disc_dyn, prediction_skip):
+    loss = loss_fn(states, inputs, param, disc_dyn, prediction_skip)
 
     x, x0, lbx, ubx = get_dec_vectors(param)
     
