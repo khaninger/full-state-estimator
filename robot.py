@@ -4,50 +4,90 @@ import numpy as np
 import casadi as ca
 from casadi_kin_dyn import pycasadi_kin_dyn
 
+class Robot():
+    '''
+    This holds all configuration and contact models
+    '''
+    def __init__(self, q0, cov_init, contact_params, est_par = []):
+        print("Building robot with contact pars: {}".format(par['contact_1']))
+        print("estimation pars:   {}".format(est_par))
 
-class robot():
+        # xi is the state which gets fed to the dynamics
+        self.xi = {'q': q0,
+                   'dq': ca.DM.zeros(q0.size)}
+        
+        for par in est_par: # getting initialized by what's in pars
+            self.xi[par] = contact_params.get(par, np.zeros(3))
+        
+        self.contact = Contact(contact_params) 
+        self.robot = RobotDynamic(par)
+    
+    def step(self, q, tau, F = None):
+        xi = ca.vertcat(self.q, self.dq, self.contact.get_
+        xi_next = self.robot.step(q = q, tau = tau, F = F)  # predict state and output at next time step
+        
+    def get_additional_state(self, xi):
+        # Returns a dictionary for all the additional state
+        #self.x['q'] = xi_corr[:self.dyn_sys.nq].full()
+        #self.x['dq'] = xi_corr[self.dyn_sys.nq:2*self.dyn_sys.nq].full()
+        #if self.est_geom: self.x['p'] = xi_corr[2*self.dyn_sys.nq:].full()
+        #if self.est_stiff: self.x['stiff'] = xi_corr[2*self.dyn_sys.nq:].full().flatten()
+        #self.x['cont_pt'] = x_next['cont_pt'].full().flatten()
+        #x_ee = self.dyn_sys.fwd_kin(self.x['q'])
+        #self.x['x_ee'] = (x_ee[0].full(),
+        #                  x_ee[1].full())
+        #self.x['xi'] = xi_corr.full()
+        #self.x['f_ee_mo'] =  (self.dyn_sys.jacpinv(self.x['q'])@x_next['tau_err']).full()
+        #self.x['f_ee_obs'] = (self.dyn_sys.jacpinv(self.x['q'])@x_next['tau_i']).full()
+
+class Contact():
+    '''
+    This class holds contact parameters, which can be either symbolic,
+    e.g. when being optimized or estimated, or numerical
+    '''
+    def __init__(self, params):
+        self.pos = params.get(pos, ca.SX.sym('pos',3))
+        self.stiff = params.get(stiff, ca.SX.sym('stiff',3))
+        self.rest = params.get(rest, ca.SX.sym('rest',3))
+        
+        self.sym_params = [] # parameters which are symbolic, to be estimated
+        if type(self.pos) == ca.SX: sym_params.append(self.pos)
+        if type(self.stiff) == ca.SX: sym_params.append(self.stiff)
+        if type(self.rest) == ca.SX: sym_params.append(self.rest)
+        
+    def get_force(self, x_ee):
+        x_contact = self.x_ee[0]+self.x_ee[1]@self.pos
+        disp = x_con - self.rest
+        F = (self.stiff.T)@disp
+        return F, disp, x_contact
+
+    def get_joint_torque(self, q, x_ee):
+        # Get the joint torque in q
+        F, _, x_contact = self.get_force(x_ee)
+        n_i = self.stiff/ca.norm_2(self.stiff)
+        J_i = ca.jacobian(n_i.T@x_contact, q)
+        return J_i.T@F
+    
+    def get_sym_params():
+        return ca.vertcat(*self.sym_params)
+
+class RobotDynamics():
     """ This class handles the loading of robot dynamics/kinematics, the discretization/integration, and linearization
         This class should be stateless (e.g. the actual system state shouldn't be stored here).
     """
-    def __init__(self, par, opt_par = {}, est_par = {}):
-        print("Building robot with contact pars: {}".format(par['contact_1']))
-        print("optimization pars: {}".format(opt_par))
-        print("estimation pars:   {}".format(est_par))
-        self.contacts = []
-        self.contact_displacements = [] # signed distance functions
-        self.contact_pts = []           # list of contact models
-        self.vars = {}                  # dictionary of state
+    def __init__(self, par):
         self.jit_options = {} #{'jit':True, 'compiler':'shell', "jit_options":{"compiler":"gcc", "flags": ["-O3"]}}
-
         self.load_kin_dyn(par['urdf'], par['urdf_path'])
-        self.build_vars(est_par)
+
+        self.q = ca.SX.sym('q', self.nq)
+        self.dq = ca.SX.sym('dq', self.nq)
+        self.tau = ca.SX.sym('tau', self.nq)
+        
         self.build_fwd_kin()
 
-        # Add contact model
-        par['contact_1'].update(opt_par)
-        par['contact_1'].update(est_par)
-        self.add_contact(par['contact_1'])
         self.fric_model = par['fric_model']
 
         self.build_disc_dyn(par['h'], opt_par, est_par)
-
-    def add_contact(self, contact_model):
-        """ Add the contact_model to the robot """
-        x_i = self.x_ee[0]+self.x_ee[1]@contact_model['pos']
-        cont_i = ca.Function('cont', [self.vars['q']], [x_i], ['q'], ['x_i'])
-        self.contact_pts.append(cont_i)
-        disp_i = ca.Function('disp',[self.vars['q']],
-                             [x_i - contact_model['rest']], ['q'],['xd'])
-        self.contact_displacements.append(disp_i)
-        n_i = contact_model['stiff']/ca.norm_2(contact_model['stiff'])
-        J_i = ca.jacobian(n_i.T@x_i, self.vars['q'])
-        if isinstance(contact_model['stiff'], np.ndarray):
-            F_i = ca.DM(contact_model['stiff']).T@(x_i - contact_model['rest'])
-        else:
-            F_i = contact_model['stiff'].T@(x_i - contact_model['rest'])
-        tau_i = J_i.T@F_i
-        contact_i = ca.Function('contact', [self.vars['q']], [tau_i], ['q'], ['tau_i'])
-        self.contacts.append(contact_i)
 
     def load_kin_dyn(self, urdf, urdf_path):
         self.model = pin.buildModelsFromUrdf(urdf_path, verbose = True)[0]
@@ -57,100 +97,66 @@ class robot():
         kindyn = pycasadi_kin_dyn.CasadiKinDyn(urdf)
         self.fwd_kin  = ca.Function.deserialize(kindyn.fk('tool0'))
         self.nq = self.model.nq
-
-    def build_vars(self, est_pars):
-        self.vars['q'] = ca.SX.sym('q', self.nq)
-        self.vars['dq'] = ca.SX.sym('dq', self.nq)
-        self.vars['est_pars'] = ca.vertcat(*est_pars.values())
-
-        self.vars['xi'] = ca.vertcat(self.vars['q'], self.vars['dq'], self.vars['est_pars'])
-        self.vars['ddq']= ca.SX.sym('ddq', self.nq)
-        self.vars['tau'] = ca.SX.sym('tau', self.nq)
-        
-        self.np = 0
-        for v in est_pars.values():
-            self.np += v.size()[0]
-        self.nx = 2*self.nq+self.np
-        self.ny = self.nq
-        
+                       
     def build_fwd_kin(self):
-        q = self.vars['q']
-        dq = self.vars['dq']
-        
-        self.x_ee = self.fwd_kin(q) # x is TCP pose as (pos, R), where pos is a 3-Vector and R a rotation matrix
+        self.x_ee = self.fwd_kin(self.q) # x is TCP pose as (pos, R), where pos is a 3-Vector and R a rotation matrix
     
-        J = ca.jacobian(self.x_ee[0], q)
-        Jd = ca.jacobian(J.reshape((np.prod(J.shape),1)), q)@dq # Jacobian on a matrix is tricky so we make a vector
-        Jd = Jd.reshape(J.shape)@dq # then reshape the result into the right shape
-        #Jd = cpin.computeForwardKinematicsDerivatives(self.cmodel, self.cdata, q, dq)
+        J = ca.jacobian(self.x_ee[0], self.q)
+        Jd = ca.jacobian(J.reshape((np.prod(J.shape),1)), self.q)@self.dq # Jacobian on a matrix is tricky so we make a vector
+        Jd = Jd.reshape(J.shape)@self.dq # then reshape the result into the right shape
         
-        self.jac = ca.Function('jacobian', [q], [J], ['q'], ['Jac'])
-        self.jacpinv = ca.Function('jac_pinv', [q], [ca.pinv(J.T)], ['q'], ['pinv']) 
-        self.djac = ca.Function('dot_jacobian',  [q, dq], [Jd])
+        self.jac = ca.Function('jacobian', [self.q], [J], ['q'], ['Jac'])
+        self.jacpinv = ca.Function('jac_pinv', [self.q], [ca.pinv(J.T)], ['q'], ['pinv']) 
+        self.djac = ca.Function('dot_jacobian',  [self.q, self.dq], [Jd])
         
-        self.d_fwd_kin = ca.Function('dx', [q, dq], [J@dq], ['q', 'dq'], ['dx'])
-        self.dd_fwd_kin = ca.Function('ddx', [q, dq, self.vars['ddq']],
+        self.d_fwd_kin = ca.Function('dx', [self.q, self.dq], [J@self.dq], ['q', 'dq'], ['dx'])
+        self.dd_fwd_kin = ca.Function('ddx', [self.q, self.dq, self.vars['ddq']],
                                       [Jd + J@self.vars['ddq']],
                                       ['q', 'dq', 'ddq'], ['ddx'])
     
-    def build_disc_dyn(self, h, opt_par, est_par):
-        q = self.vars['q']
-        dq = self.vars['dq']
-        tau = self.vars['tau']
+    def build_disc_dyn(self, h, contact):
+        # Build the dynamics, which maps
+        # (q, dq, symbolic_params) -> (q_next, dq_next)
+        # where symbolic_params are the symbolic parameters of the env primitives
+        Minv = cpin.computeMinverse(self.cmodel, self.cdata, self.q)
         
-        tau_err = tau - cpin.computeGeneralizedGravity(self.cmodel, self.cdata, q)
+        tau_err = self.tau - cpin.computeGeneralizedGravity(self.cmodel, self.cdata, self.q)
+        tau_contact = contact.get_torque(self.q, self.x_ee)
+        tau_f = -self.dq*self.fric_model['visc']
+        
+        ddq =  Minv@(tau_err+tau_contact+tau_f)
+                        
+        dq_next = dq + h*ddq
+        q_next  = q + h*dq_next
 
-        Minv = cpin.computeMinverse(self.cmodel, self.cdata, q)
-        
-        tau_i, disp, cont_pt = self.get_contact_forces(q, dq)
-        tau_f = -dq*self.fric_model['visc']
-        ddq =  Minv@(tau_err+tau_i+tau_f)
+        fn_dict = {'q': self.q, 'dq': self.dq, 'tau':self.tau,
+                   'q_next':q_next, 'dq_next':dq_next}
 
-        M = cpin.crba(self.cmodel, self.cdata, q)
-        mom = M@dq
-        fn_dict = {'xi':self.vars['xi'],
-                   'tau':tau, 'tau_err':tau_err,
-                   'tau_i': tau_i, 'mom': mom,
-                   'disp':disp, 'cont_pt':cont_pt}
-        fn_dict.update(opt_par)
-        
-        dq_next= dq + h*ddq
-        q_next = q + h*dq_next
-        fn_dict['xi_next'] = ca.vertcat(q_next, dq_next, self.vars.get('est_pars', []))
+        contact_params = contact.get_sym_params()
+        fn_dict.update(contact_params)
         
         self.disc_dyn =  ca.Function('disc_dyn', fn_dict,
-                                     ['xi', 'tau', *opt_par.keys()],
-                                     ['xi_next', 'disp', 'cont_pt', 'tau_i', 'tau_err', 'mom'], self.jit_options).expand()
-        self.build_lin_matrices(h)
+                                     ['q', 'dq', 'tau', *contact_params.keys()],
+                                     ['q_next', 'dq_next'], self.jit_options).expand()
     
-    def build_lin_matrices(self, h):
+    def build_lin_matrices(self, h, contact):
         """ Makes the linearized dynamic matrix A for semi-explicit integrator
             h: time step in seconds
         """
-        q = self.vars['q']
-        dq = self.vars['dq']
-        fn_dict = {'xi':self.vars['xi'],
-                   'tau':self.vars['tau']}
-
+        fn_dict = {'q': self.q, 'dq': self.dq, 'tau':self.tau}
+        est_params = contact.get_sym_params()
+        num_est_params = est_params.shape[0]
+        fn_dict.update(est_params)
         res = self.disc_dyn.call(fn_dict)
-
-        fn_dict['A'] = ca.jacobian(res['xi_next'], self.vars['xi'])
+        
+        xi = ca.vertcat(self.q, self.dq, *est_params)
+        xi_next = ca.vertcat(res['q_next'], res['dq_next'], ca.SX(num_est_params))
+        
+        fn_dict['A'] = ca.jacobian(xi_next, xi)
         
         self.A_fn = ca.Function('A', fn_dict,  
-                                ['xi', 'tau'],['A'], self.jit_options).expand()
-        self.C =  np.hstack((np.eye(self.nq), np.zeros((self.nq, self.nx-self.nq))))
-        '''
-        ddq = self.get_ddq(q, dq, tau_err)
-        ddq_q = ca.jacobian(ddq, q)
-        ddq_dq = ca.jacobian(ddq, dq)
-        I = ca.DM.eye(self.nq)
-        A = ca.vertcat(ca.horzcat(I + h*h*ddq_q, h*h*ddq_dq),
-                       ca.horzcat(h*ddq_q,   I + h*ddq_dq))
-
-        fn_dict = {'q': q, 'dq': dq, 'tau_err': tau_err, 'A': A}
-        self.A_fn =  ca.Function('A', fn_dict,
-                                 ['q', 'dq', 'tau_err'],['A'])
-        '''
+                                ['xi', 'tau'], ['A'], self.jit_options).expand()
+        self.C =  np.hstack((np.eye(self.nq), np.zeros((self.nq, self.nq+num_est_params))))
 
     def get_tcp_motion(self, q, dq, ddq):
         x = self.fwd_kin(q)
@@ -161,20 +167,3 @@ class robot():
     def get_linearized(self, state):
         return self.A_fn.call(state)['A'], self.C
 
-    def get_contact_forces(self, q, dq):
-        """ Returns the state-dependent external forces
-            q: joint pose
-            dq: joint velocity
-        """
-        F = 0
-        for con in self.contacts:
-            F += con(q)
-        disp = []
-        for d in self.contact_displacements:
-            disp.append(d(q))
-        disp = ca.vertcat(*disp)
-        cont_pt = []
-        for p in self.contact_pts:
-            cont_pt.append(p(q))
-        cont_pt = ca.vertcat(*cont_pt)
-        return F, disp, cont_pt

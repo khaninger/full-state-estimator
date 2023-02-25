@@ -26,11 +26,12 @@ def init_rosparams(est_geom = False, est_stiff = False):
 
 
     p['fric_model']= {'visc':np.array(rospy.get_param('visc_fric', [0.2]*6))}
-    p['h'] = rospy.get_param('obs_rate', 1./475.)
+    p['h'] = rospy.get_param('obs_rate', 1./500.)
 
     p['proc_noise'] = {'pos':np.array(rospy.get_param('pos_noise', [1e-1]*6)),
                        'vel':np.array(rospy.get_param('vel_noise', [1e2]*6))}
     p['cov_init'] = np.array(rospy.get_param('cov_init', [1.]*12))
+    
     if est_geom:
         p['proc_noise']['geom'] = np.array(rospy.get_param('geom_noise', [1e1]*3))
         p['cov_init'] = np.append(p['cov_init'],[1.5]*3)
@@ -47,11 +48,10 @@ def init_rosparams(est_geom = False, est_stiff = False):
 class ros_observer():
     """ This handles the ros interface, loads models, etc
     """
-    def __init__(self, joint_topic = 'joint_states',
-                 force_topic = 'wrench', est_geom = False, est_stiff = False):
+    def __init__(self, joint_topic = 'joint_states', force_topic = 'wrench',
+                 est_geom = False, est_stiff = False):
         
         self.q = None        # joint position
-        self.tau_err = None  # torque error
         self.tau = None      # motor torque
         self.F = None        # EE force
         self.x = None        # observer state
@@ -69,10 +69,14 @@ class ros_observer():
 
         self.params = init_rosparams(est_geom, est_stiff)
         
-        self.observer = ekf(self.params,
-                            np.array([-0.23, 0.71, -1.33, 0.03, 1.10, 17.03]),
-                            est_geom, est_stiff)
-
+    def observer_init(self):
+        cov = np.diag(self.params['cov_init'])  # initial covariance
+        proc_noise = np.diag(np.concatenate((self.params['proc_noise']['pos'],
+                                             self.params['proc_noise']['vel'],
+                                             self.params['proc_noise'].get('geom', []),
+                                             self.params['proc_noise'].get('stiff', []))))
+        meas_noise = np.diag(self.params['meas_noise']['pos'])
+        self.observer = ekf(self.robot, cov, proc_noise, meas_noise)
 
     def joint_callback(self, msg):
         """ To be called when the joint_state topic is published with joint position and torques """
@@ -96,16 +100,7 @@ class ros_observer():
             print("Error loading ROS message in force_callback")
 
     def observer_update(self):
-        #try:
-            self.x = self.observer.step(q = self.q,
-                                        tau = self.tau,
-                                        F = self.F)
-            #print(self.x['stiff'])
-            #print(self.x['p'].T)
-        #except Exception as e:
-        #    print("Error in observer step")
-        #    print(e)
-        #    rospy.signal_shutdown("error in observer")
+        self.x = self.observer.step(q = self.q, tau = self.tau, F = self.F)
 
     def publish_state(self):
         ddq = self.x.get('ddq', np.zeros(self.observer.dyn_sys.nq))
@@ -121,6 +116,7 @@ class ros_observer():
             self.ee_pub.publish(msg_ee)
     def shutdown(self):
         print("Shutting down observer")
+
 
 def start_node(est_geom = False, est_stiff = False):
     rospy.init_node('observer')
