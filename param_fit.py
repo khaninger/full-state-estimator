@@ -18,7 +18,6 @@ def loss_fn(states, inputs, param, disc_dyn, prediction_skip = 1, num_pts = 2000
     for i in range(0, len(states)-prediction_skip, skip_size):
         param['xi'] = states[i]
         param['tau'] = inputs[i]
-
         res = disc_dyn.call(param)
         loss += ca.norm_2(states[i+prediction_skip]-res['xi_next'])
         loss += 0.1*ca.norm_2(res['disp'])
