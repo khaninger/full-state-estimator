@@ -44,8 +44,8 @@ class ekf():
 
         cov_next = A@self.cov@(A.T) + self.proc_noise
         L = cov_next@C.T@ca.inv(C@cov_next@(C.T) + self.meas_noise) # calculate Kalman gain
-        if np.any(np.isnan(L)):
-           raise ValueError("Nans in the L matrix")
+        if np.any(np.isnan(L)): raise ValueError("Nans in the L matrix")
+        
         xi_corr = x_next['xi_next'] + L@(q - x_next['xi_next'][:self.dyn_sys.nq])
         self.x['q'] = xi_corr[:self.dyn_sys.nq].full()
         self.x['dq'] = xi_corr[self.dyn_sys.nq:2*self.dyn_sys.nq].full()
@@ -58,7 +58,9 @@ class ekf():
         self.x['xi'] = xi_corr.full()
         self.x['f_ee_mo'] =  (self.dyn_sys.jacpinv(self.x['q'])@x_next['tau_err']).full()
         self.x['f_ee_obs'] = (self.dyn_sys.jacpinv(self.x['q'])@x_next['tau_i']).full()
+        
         self.cov = (ca.DM.eye(self.dyn_sys.nx)-L@C)@cov_next
+        
         return self.x
 
     def likelihood(self, obs):

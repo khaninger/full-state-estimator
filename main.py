@@ -19,12 +19,11 @@ def init_rosparams(est_geom = False, est_stiff = False):
     p['joint_names'] = [ 'shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_joint',
                          'wrist_1_joint', 'wrist_2_joint', 'wrist_3_joint']
 
-
     p['fric_model']= {'visc':np.array(rospy.get_param('visc_fric', [0.4]*6))}
     p['h'] = rospy.get_param('obs_rate', 1./500.)
 
-    p['proc_noise'] = {'pos':np.array(rospy.get_param('pos_noise', [1e-4]*6)),
-                       'vel':np.array(rospy.get_param('vel_noise', [5e4]*6))}
+    p['proc_noise'] = {'pos':np.array(rospy.get_param('pos_noise', [1e-2]*6)),
+                       'vel':np.array(rospy.get_param('vel_noise', [1e5]*6))}
     p['cov_init'] = np.array(rospy.get_param('cov_init', [1.]*12))
     if est_geom:
         p['proc_noise']['geom'] = np.array(rospy.get_param('geom_noise', [1e1]*3))
@@ -32,7 +31,7 @@ def init_rosparams(est_geom = False, est_stiff = False):
     if est_stiff:
         p['proc_noise']['stiff'] = np.array(rospy.get_param('stiff_noise', [5e3]*3))
         p['cov_init'] = np.append(p['cov_init'],[100]*3)
-    p['meas_noise'] = {'pos':np.array(rospy.get_param('meas_noise', [5e-2]*6))}
+    p['meas_noise'] = {'pos':np.array(rospy.get_param('meas_noise', [1e-1]*6))}
 
     p['contact_1'] = {'pos':   ca.DM(rospy.get_param('contact_1_pos', [0]*3)),
                       'stiff': ca.DM(rospy.get_param('contact_1_stiff', [0]*3)),
@@ -65,7 +64,7 @@ class ros_observer():
         self.params = init_rosparams(est_geom, est_stiff)
         
         self.observer = ekf(self.params,
-                            np.array([-0.23, 0.71, -1.33, 0.03, 1.10, 17.03]),
+                            np.array([2.29, -1.02, -0.9, -2.87, 1.55, 0.56]),
                             est_geom, est_stiff)
         
     def joint_callback(self, msg):
@@ -164,7 +163,7 @@ def param_fit(bag):
     p_to_opt['rest'] = ca.SX.sym('rest',3)
 
     p = init_rosparams()
-    prediction_skip = 10
+    prediction_skip = 1
     p['h'] *= prediction_skip
     rob = robot(p, p_to_opt)
     optimized_par = optimize(states.T, inputs.T, p_to_opt, rob.disc_dyn, prediction_skip)

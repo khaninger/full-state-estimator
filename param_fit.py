@@ -35,7 +35,7 @@ def loss_fn(states, inputs, param, disc_dyn, prediction_skip = 1, num_pts = 2000
 
     for k,v in param.items():
         if k == 'stiff':
-            loss += 1e-10*ca.norm_1(v)
+            loss += 0#1e-12*ca.sqrt(ca.norm_1(v))
         elif k == 'pos':
             loss += 50.0*v.T@v
     return loss

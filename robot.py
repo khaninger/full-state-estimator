@@ -100,13 +100,22 @@ class robot():
         
         tau_err = tau - cpin.computeGeneralizedGravity(self.cmodel, self.cdata, q)
 
-        Minv = cpin.computeMinverse(self.cmodel, self.cdata, q)
-        
+        #Minv = cpin.computeMinverse(self.cmodel, self.cdata, q)
+        M = cpin.crba(self.cmodel, self.cdata, q)
+        Minv = ca.inv(M+ca.diag(np.array([0.5, 0.5, 0.5, 0.25, 0.25, 0.25])))
+        #Minv_fn = ca.Function('minv', [q], [Minv])
+        #print(Minv_fn( np.array([2.29, -1.02, -0.9, -2.87, 1.55, 0.56])))
         tau_i, disp, cont_pt = self.get_contact_forces(q, dq)
         tau_f = -dq*self.fric_model['visc']
-        ddq =  Minv@(tau_err+tau_i)#+tau_f)
+        ddq =  Minv@(tau_err-tau_i)#+tau_f)
 
-        M = cpin.crba(self.cmodel, self.cdata, q)
+        #q_test = np.array([2.29, -1.02, -0.9, -2.87, 1.55, 0.56])
+        #dq_test = 0.1*np.ones(6)
+        #tau_g_fn = ca.Function('tau_g', [q], [cpin.computeGeneralizedGravity(self.cmodel, self.cdata, q)])
+        #tau_g_eval = tau_g_fn(q_test)
+        #ddq_fn = ca.Function('ddq', [q, dq, tau], [ddq])
+        #print(f'ddq: {ddq_fn(q_test, dq_test, tau_g_eval+0.1*np.ones(6))}')
+
         mom = M@dq
         fn_dict = {'xi':self.vars['xi'],
                    'tau':tau, 'tau_err':tau_err,
@@ -119,6 +128,9 @@ class robot():
         dq_next= ca.inv(semiimplicit)@(dq + h*ddq)
         q_next = q + h*dq_next
         fn_dict['xi_next'] = ca.vertcat(q_next, dq_next, self.vars.get('est_pars', []))
+
+        #dq_next_test = ca.Function('dq', [q, dq, tau], [dq_next])
+        #print(f'dq_next: {dq_next_test(q_test, dq_test, tau_g_eval+2.1*np.ones(6))}')
         
         self.disc_dyn =  ca.Function('disc_dyn', fn_dict,
                                      ['xi', 'tau', *opt_par.keys()],
