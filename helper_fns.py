@@ -3,6 +3,16 @@ import rosbag
 import rospy
 from sensor_msgs.msg import JointState
 
+# Motor params for ur16, found in .ur_control for joint sizes 4,4,3,2,2,2
+p = {}
+p['gearratio'] = np.array(rospy.get_param('gearratio', [101, 101, 101, 54, 54, 54 ])) 
+p['torque_constant'] = np.array(rospy.get_param('torque_constant',
+                                                    [0.11968, 0.11968, 0.098322,
+                                                     0.10756, 0.10756, 0.10756 ]))
+p['names'] =  ['shoulder_pan_joint', 'shoulder_lift_joint',
+               'elbow_joint', 'wrist_1_joint',
+               'wrist_2_joint', 'wrist_3_joint']
+
 def build_jt_msg(q, dq = [], tau = []):
     msg = JointState()
     msg.header.stamp = rospy.Time.now()
@@ -51,18 +61,19 @@ def map_joint_state(msg, prev_msgs):
     prev_msgs['torque'].append(t)
     return prev_msgs
 
-def map_ur_joint_state(msg, names =  ['shoulder_pan_joint', 'shoulder_lift_joint',
-                                      'elbow_joint', 'wrist_1_joint',
-                                      'wrist_2_joint', 'wrist_3_joint']):
+def map_ur_joint_state(msg):
     q = []
     v = []
     current = []
-    for jt_name in names:
+    for jt_name in p['names']:
         ind = msg.name.index(jt_name)
         q.append(msg.position[ind])
         v.append(msg.velocity[ind])
         current.append(msg.effort[ind])
-    return q, v, current
+    current = np.array(current)
+    motor_torque = current*p['torque_constant']
+    tau = motor_torque*p['gearratio']
+    return q, v, tau
 
 def get_aligned_msgs(msgs1, msgs2):
     ''' 

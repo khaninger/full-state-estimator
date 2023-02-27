@@ -42,12 +42,13 @@ class robot():
         n_i = contact_model['stiff']/ca.norm_2(contact_model['stiff'])
         J_i = ca.jacobian(n_i.T@x_i, self.vars['q'])
         if isinstance(contact_model['stiff'], np.ndarray):
-            F_i = ca.DM(contact_model['stiff']).T@(x_i - contact_model['rest'])
+            F_i = -ca.DM(contact_model['stiff']).T@(x_i-contact_model['rest'])
         else:
-            F_i = contact_model['stiff'].T@(x_i - contact_model['rest'])
+            F_i = -contact_model['stiff'].T@(x_i-contact_model['rest'])
         tau_i = J_i.T@F_i
-        contact_i = ca.Function('contact', [self.vars['q']], [tau_i], ['q'], ['tau_i'])
-        self.contacts.append(contact_i)
+        #contact_i = ca.Function('contact', [self.vars['q']], [tau_i], ['q'], ['tau_i'])
+        self.contacts.append(tau_i)
+        #print(self.contacts[0])
 
     def load_kin_dyn(self, urdf, urdf_path):
         self.model = pin.buildModelsFromUrdf(urdf_path, verbose = True)[0]
@@ -64,6 +65,7 @@ class robot():
         self.vars['est_pars'] = ca.vertcat(*est_pars.values())
 
         self.vars['xi'] = ca.vertcat(self.vars['q'], self.vars['dq'], self.vars['est_pars'])
+        
         self.vars['ddq']= ca.SX.sym('ddq', self.nq)
         self.vars['tau'] = ca.SX.sym('tau', self.nq)
         
@@ -100,23 +102,37 @@ class robot():
         
         tau_err = tau - cpin.computeGeneralizedGravity(self.cmodel, self.cdata, q)
 
-        Minv = cpin.computeMinverse(self.cmodel, self.cdata, q)
-        
+        #Minv = cpin.computeMinverse(self.cmodel, self.cdata, q)
+        M = cpin.crba(self.cmodel, self.cdata, q)
+        Minv = ca.inv(M+ca.diag(np.array([0.5, 0.5, 0.5, 0.25, 0.25, 0.25])))
+        #Minv_fn = ca.Function('minv', [q], [Minv])
+        #print(Minv_fn( np.array([2.29, -1.02, -0.9, -2.87, 1.55, 0.56])))
         tau_i, disp, cont_pt = self.get_contact_forces(q, dq)
         tau_f = -dq*self.fric_model['visc']
-        ddq =  Minv@(tau_err+tau_i+tau_f)
-
-        M = cpin.crba(self.cmodel, self.cdata, q)
+        ddq =  Minv@(tau_err+tau_i)#+tau_f)
+        #q_test = np.array([2.29, -1.02, -0.9, -2.87, 1.55, 0.56])
+        #dq_test = 0.1*np.ones(6)
+        #tau_g_fn = ca.Function('tau_g', [q], [cpin.computeGeneralizedGravity(self.cmodel, self.cdata, q)])
+        #tau_g_eval = tau_g_fn(q_test)
+        #ddq_fn = ca.Function('ddq', [q, dq, tau], [ddq])
+        #print(ddq_fn.get_free())
+        #print(f'ddq: {ddq_fn(q_test, dq_test, tau_g_eval+0.1*np.ones(6))}')
+        
         mom = M@dq
         fn_dict = {'xi':self.vars['xi'],
                    'tau':tau, 'tau_err':tau_err,
                    'tau_i': tau_i, 'mom': mom,
                    'disp':disp, 'cont_pt':cont_pt}
         fn_dict.update(opt_par)
+
+        semiimplicit = (ca.DM.eye(self.nq)+h*Minv@ca.diag(self.fric_model['visc']))
         
-        dq_next= dq + h*ddq
+        dq_next= ca.inv(semiimplicit)@(dq + h*ddq)
         q_next = q + h*dq_next
         fn_dict['xi_next'] = ca.vertcat(q_next, dq_next, self.vars.get('est_pars', []))
+        #print(ca.jacobian(q_next, self.vars['xi'])[:,-3:])
+        #dq_next_test = ca.Function('dq', [q, dq, tau], [dq_next])
+        #print(f'dq_next: {dq_next_test(q_test, dq_test, tau_g_eval+2.1*np.ones(6))}')
         
         self.disc_dyn =  ca.Function('disc_dyn', fn_dict,
                                      ['xi', 'tau', *opt_par.keys()],
@@ -131,9 +147,9 @@ class robot():
         dq = self.vars['dq']
         fn_dict = {'xi':self.vars['xi'],
                    'tau':self.vars['tau']}
-
+        #print(self.vars['xi'])
         res = self.disc_dyn.call(fn_dict)
-
+        
         fn_dict['A'] = ca.jacobian(res['xi_next'], self.vars['xi'])
         
         self.A_fn = ca.Function('A', fn_dict,  
@@ -166,9 +182,9 @@ class robot():
             q: joint pose
             dq: joint velocity
         """
-        F = 0
+        tau = 0
         for con in self.contacts:
-            F += con(q)
+            tau += con
         disp = []
         for d in self.contact_displacements:
             disp.append(d(q))
@@ -177,4 +193,4 @@ class robot():
         for p in self.contact_pts:
             cont_pt.append(p(q))
         cont_pt = ca.vertcat(*cont_pt)
-        return F, disp, cont_pt
+        return tau, disp, cont_pt
