@@ -27,7 +27,7 @@ def loss_fn(states, inputs, param, disc_dyn, prediction_skip = 1, num_pts = 2000
     for c in cont_pts:
         c -= cont_pts_mean
         
-    #loss += 1e-5*ca.sumsqr(ca.vertcat(*cont_pts))
+    #loss += 1e-2*ca.sumsqr(ca.vertcat(*cont_pts))
 
     del param['xi']
     del param['tau']
@@ -36,7 +36,7 @@ def loss_fn(states, inputs, param, disc_dyn, prediction_skip = 1, num_pts = 2000
         if k == 'stiff':
             loss += 0#1e-12*ca.sqrt(ca.norm_1(v))
         elif k == 'pos':
-            loss += 50.0*v.T@v
+            loss += 15.*v.T@v #+ 100*v[0]*v[0]
     return loss
 
 def validate(states, inputs, param, disc_dyn, num_pts = 3500):
@@ -71,11 +71,11 @@ def get_dec_vectors(param):
             lbx += [ca.DM.zeros(3)]
             ubx += [1e6*ca.DM.ones(3)]
         if k == 'pos':
-            x0 += [ca.DM((0.0, 0.0, 0.0))]
+            x0 += [ca.DM((0.1, 0.1, 0.1))]
             lbx += [ca.DM((-0.5, -0.5, 0.0))]
             ubx += [ca.DM((0.5, 0.5, 0.6))]
         if k == 'rest':
-            x0 += [ca.DM((-0.5, 0.3, 0.2))]
+            x0 += [ca.DM((-0.0, 0.0, 0.0))]
             lbx += [-2*ca.DM.ones(3)]
             ubx += [2*ca.DM.ones(3)]
     x = ca.vertcat(*x)

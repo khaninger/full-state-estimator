@@ -13,7 +13,7 @@ class ekf():
         est_par = {}
         if est_geom:
             est_par = {'pos':ca.SX.sym('contact_1_pos',3)}
-            self.x['p'] = 0.1*ca.DM.ones(3)
+            self.x['p'] = 0.15*ca.DM.ones(3)
         if est_stiff:
             est_par = {'stiff':ca.SX.sym('contact_1_stiff',3)}
             self.x['stiff'] = 1*ca.DM.ones(3)

@@ -20,16 +20,16 @@ def init_rosparams():
                          'wrist_1_joint', 'wrist_2_joint', 'wrist_3_joint']
 
     p['fric_model']= {'visc':np.array(rospy.get_param('visc_fric', [0.4]*6))}
-    p['h'] = rospy.get_param('obs_rate', 1./50.)
+    p['h'] = rospy.get_param('obs_rate', 1./500.)
 
     p['proc_noise'] = {'pos':  np.array(rospy.get_param('pos_noise', [1e-2]*6)),
                        'vel':  np.array(rospy.get_param('vel_noise', [1e5]*6)),
                        'geom': np.array(rospy.get_param('geom_noise', [1e1]*3)),
-                       'stiff':np.array(rospy.get_param('stiff_noise', [5e9]*3))}
+                       'stiff':np.array(rospy.get_param('stiff_noise', [5e10]*3))}
     p['cov_init'] = {'pos': [1e-1]*6,
                      'vel': [1e5]*6,
-                     'geom':[1.5]*3,
-                     'stiff':[1e13]*3}
+                     'geom':[1.5e9]*3,
+                     'stiff':[1e15]*3}
     p['meas_noise'] = {'pos':np.array(rospy.get_param('meas_noise', [1e-1]*6))}
     p['contact_1'] = {'pos':   ca.DM(rospy.get_param('contact_1_pos', [0]*3)),
                       'stiff': ca.DM(rospy.get_param('contact_1_stiff', [0]*3)),
@@ -131,6 +131,9 @@ def generate_traj(bag, est_geom = False, est_stiff = False):
     true_vel = np.zeros((6, num_msgs))
     x_ees = []
     inputs = msgs['torque']
+
+    #for i in range(2000):
+        #res = observer.step(q = msgs['pos'][:,0], tau = msgs['torque'][:,0])
     
     for i in range(num_msgs):
         true_pos[:,i] = msgs['pos'][:,i]
@@ -145,7 +148,9 @@ def generate_traj(bag, est_geom = False, est_stiff = False):
 
     fname = bag[:-4]+'.pkl'
     with open(fname, 'wb') as f:
-        pickle.dump((states, inputs, contact_pts, x_ees, stiff, f_ee_mo, f_ee_obs, force['force'], true_pos, true_vel), f)
+        pickle.dump((states, inputs, contact_pts, x_ees, stiff,
+                     f_ee_mo, f_ee_obs, force['force'],
+                     true_pos, true_vel), f)
     print('Finished saving state trajectory of length {}'.format(len(states.T)))
 
 def param_fit(bag):
