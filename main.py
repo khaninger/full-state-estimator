@@ -26,10 +26,10 @@ def init_rosparams():
                        'vel':  np.array(rospy.get_param('vel_noise', [1e5]*6)),
                        'geom': np.array(rospy.get_param('geom_noise', [1e1]*3)),
                        'stiff':np.array(rospy.get_param('stiff_noise', [5e10]*3))}
-    p['cov_init'] = {'pos': [1e-1]*6,
+    p['cov_init'] = {'pos': [1e-2]*6,
                      'vel': [1e5]*6,
-                     'geom':[1.5e9]*3,
-                     'stiff':[1e15]*3}
+                     'geom':[1.5e6]*3,
+                     'stiff':[6e15]*3}
     p['meas_noise'] = {'pos':np.array(rospy.get_param('meas_noise', [1e-1]*6))}
     p['contact_1'] = {'pos':   ca.DM(rospy.get_param('contact_1_pos', [0]*3)),
                       'stiff': ca.DM(rospy.get_param('contact_1_stiff', [0]*3)),
@@ -136,6 +136,8 @@ def generate_traj(bag, est_geom = False, est_stiff = False):
         #res = observer.step(q = msgs['pos'][:,0], tau = msgs['torque'][:,0])
     
     for i in range(num_msgs):
+        #if i == 1 or i == 1000 or i == 3000:
+        #    print(observer.cov)
         true_pos[:,i] = msgs['pos'][:,i]
         true_vel[:,i] = msgs['vel'][:,i]
         res = observer.step(q = msgs['pos'][:,i], tau = msgs['torque'][:,i])

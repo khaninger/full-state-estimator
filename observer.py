@@ -24,6 +24,7 @@ class ekf():
                                                   par['proc_noise']['geom'] if est_geom else [],
                                                   par['proc_noise']['stiff'] if est_stiff else [])))
 
+        
         self.cov = np.diag(np.concatenate((par['cov_init']['pos'],
                                            par['cov_init']['vel'],
                                            par['cov_init']['geom'] if est_geom else [],
@@ -50,10 +51,10 @@ class ekf():
         #print(A)
         cov_next = A@self.cov@(A.T) + self.proc_noise
         #print(cov_next)
-        L = cov_next@C.T@ca.inv(C@cov_next@(C.T) + self.meas_noise) # calculate Kalman gain
-        if np.any(np.isnan(L)): raise ValueError("Nans in the L matrix")
+        self.L = cov_next@C.T@ca.inv(C@cov_next@(C.T) + self.meas_noise) # calculate Kalman gain
+        if np.any(np.isnan(self.L)): raise ValueError("Nans in the L matrix")
     
-        xi_corr = x_next['xi_next'] + L@(q - x_next['xi_next'][:self.dyn_sys.nq])
+        xi_corr = x_next['xi_next'] + self.L@(q - x_next['xi_next'][:self.dyn_sys.nq])
         #print((L@(q - x_next['xi_next'][:self.dyn_sys.nq]))[-3:])
         #print(xi_corr)
         self.x['q'] = xi_corr[:self.dyn_sys.nq].full()
@@ -69,7 +70,7 @@ class ekf():
         self.x['f_ee_mo'] =  (self.dyn_sys.jacpinv(self.x['q'])@self.mom_obs.r).full()
         self.x['f_ee_obs'] = -(self.dyn_sys.jacpinv(self.x['q'])@x_next['tau_i']).full()
         
-        self.cov = (ca.DM.eye(self.dyn_sys.nx)-L@C)@cov_next
+        self.cov = (ca.DM.eye(self.dyn_sys.nx)-self.L@C)@cov_next
         #print(self.cov[-3:,-3:])
         return self.x
 

@@ -36,7 +36,7 @@ def loss_fn(states, inputs, param, disc_dyn, prediction_skip = 1, num_pts = 2000
         if k == 'stiff':
             loss += 0#1e-12*ca.sqrt(ca.norm_1(v))
         elif k == 'pos':
-            loss += 15.*v.T@v #+ 100*v[0]*v[0]
+            loss += 50.*v.T@v #+ 100*v[0]*v[0]
     return loss
 
 def validate(states, inputs, param, disc_dyn, num_pts = 3500):
