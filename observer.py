@@ -70,7 +70,7 @@ class ekf():
         self.x['f_ee_mo'] =  (self.dyn_sys.jacpinv(self.x['q'])@self.mom_obs.r).full()
         self.x['f_ee_obs'] = -(self.dyn_sys.jacpinv(self.x['q'])@x_next['tau_i']).full()
         
-        self.cov = (ca.DM.eye(self.dyn_sys.nx)-self.L@C)@cov_next
+        self.cov = (ca.DM.eye(self.dyn_sys.nx)-self.L@C)@cov_next # corrected covariance
         #print(self.cov[-3:,-3:])
         return self.x
 

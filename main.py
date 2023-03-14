@@ -11,7 +11,7 @@ from observer import ekf
 from robot import robot
 from helper_fns import *
 from param_fit import *
-
+import time
 def init_rosparams():
     p = {}
     p['urdf_path'] = rospy.get_param('urdf_description', 'urdf/src/universal_robot/ur_description/urdf/ur16e.urdf')
@@ -131,6 +131,8 @@ def generate_traj(bag, est_geom = False, est_stiff = False):
     true_vel = np.zeros((6, num_msgs))
     x_ees = []
     inputs = msgs['torque']
+    traj_len = len(states.T)
+    update_freq = []
 
     #for i in range(2000):
         #res = observer.step(q = msgs['pos'][:,0], tau = msgs['torque'][:,0])
@@ -140,14 +142,18 @@ def generate_traj(bag, est_geom = False, est_stiff = False):
         #    print(observer.cov)
         true_pos[:,i] = msgs['pos'][:,i]
         true_vel[:,i] = msgs['vel'][:,i]
+        tic = time.perf_counter()
         res = observer.step(q = msgs['pos'][:,i], tau = msgs['torque'][:,i])
+        toc = time.perf_counter()
+        update_freq.append(1/(toc-tic))
         states[:,i] = res['xi'].flatten()
         contact_pts[:,i] = res['cont_pt'].flatten()
         stiff[:,i] = res.get('stiff',np.zeros(3)).flatten()
         f_ee_mo[:,i] = res['f_ee_mo'].flatten()
         f_ee_obs[:,i] = res['f_ee_obs'].flatten()
         x_ees += [res['x_ee']]
-
+    average_freq = (sum(update_freq)/traj_len)/1000
+    print("Average update frequency is {} kHz".format(average_freq))
     fname = bag[:-4]+'.pkl'
     with open(fname, 'wb') as f:
         pickle.dump((states, inputs, contact_pts, x_ees, stiff,
