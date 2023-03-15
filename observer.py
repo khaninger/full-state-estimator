@@ -18,7 +18,7 @@ class ekf():
             est_par = {'stiff':ca.SX.sym('contact_1_stiff',3)}
             self.x['stiff'] = 1*ca.DM.ones(3)
 
-        self.dyn_sys = robot(par, est_par = est_par)
+        #self.dyn_sys = robot(par, est_par = est_par)
         self.proc_noise = np.diag(np.concatenate((par['proc_noise']['pos'],
                                                   par['proc_noise']['vel'],
                                                   par['proc_noise']['geom'] if est_geom else [],
@@ -33,7 +33,7 @@ class ekf():
         self.meas_noise = np.diag(par['meas_noise']['pos'])
         self.mom_obs = MomentumObserver(par, q0)
         
-    def step(self, q, tau, F = None):
+    def step(self, q, tau, dyn_sys, F = None):
         """ Steps the observer baed on the input at time t and observation at time t
             Standard EKF update, see, e.g. pg. 51 in Thrun "Probabilistic Robotics" """
         step_args = {'tau':tau,
@@ -41,8 +41,8 @@ class ekf():
                                      self.x.get('p', []),
                                      self.x.get('stiff', []))}
         #print(self.cov)
-        x_next = self.dyn_sys.disc_dyn.call(step_args)  # predict state and output at next time step
-        A, C = self.dyn_sys.get_linearized(step_args)   # get the linearized dynamics and observation matrices
+        x_next = dyn_sys.disc_dyn.call(step_args)  # predict state and output at next time step
+        A, C = dyn_sys.get_linearized(step_args)   # get the linearized dynamics and observation matrices
         #print(f"F_i = {self.dyn_sys.jacpinv(self.x['q']).T@x_next['tau_err']}")
         #print(f"tau_err = {x_next['tau_err']}")
         #print(f"tau     = {tau}")
@@ -50,6 +50,8 @@ class ekf():
         #print(q-x_next['xi_next'][:6])
         #print(A)
         cov_next = A@self.cov@(A.T) + self.proc_noise
+        self.S = C@self.cov_next@(C.T) + self.meas_noise
+        self.y_hat = C@x_next
         #print(cov_next)
         self.L = cov_next@C.T@ca.inv(C@cov_next@(C.T) + self.meas_noise) # calculate Kalman gain
         if np.any(np.isnan(self.L)): raise ValueError("Nans in the L matrix")
@@ -67,15 +69,15 @@ class ekf():
                           x_ee[1].full())
         self.x['xi'] = xi_corr.full()
         self.mom_obs.step(x_next['mom'], x_next['tau_err'])
-        self.x['f_ee_mo'] =  (self.dyn_sys.jacpinv(self.x['q'])@self.mom_obs.r).full()
+        self.x['f_ee_mo'] = (self.dyn_sys.jacpinv(self.x['q'])@self.mom_obs.r).full()
         self.x['f_ee_obs'] = -(self.dyn_sys.jacpinv(self.x['q'])@x_next['tau_i']).full()
         
         self.cov = (ca.DM.eye(self.dyn_sys.nx)-self.L@C)@cov_next # corrected covariance
         #print(self.cov[-3:,-3:])
-        return self.x
+        return self.x, self.cov, self.S, self.y_hat
 
     def likelihood(self, obs):
-        return NotImplemented
+        return
 
 class MomentumObserver():
     ''' Mostly following https://elib.dlr.de/129060/1/root.pdf '''

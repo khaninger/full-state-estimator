@@ -6,7 +6,7 @@ import numpy as np
 import rospy
 from sensor_msgs.msg import JointState
 from geometry_msgs.msg import WrenchStamped
-
+import casadi as ca
 from observer import ekf
 from robot import robot
 from helper_fns import *
@@ -143,7 +143,7 @@ def generate_traj(bag, est_geom = False, est_stiff = False):
         true_pos[:,i] = msgs['pos'][:,i]
         true_vel[:,i] = msgs['vel'][:,i]
         tic = time.perf_counter()
-        res = observer.step(q = msgs['pos'][:,i], tau = msgs['torque'][:,i])
+        #res = observer.step(q = msgs['pos'][:,i], tau = msgs['torque'][:,i], dyn_sys=)
         toc = time.perf_counter()
         update_freq.append(1/(toc-tic))
         states[:,i] = res['xi'].flatten()
