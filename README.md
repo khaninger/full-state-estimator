@@ -18,6 +18,7 @@ https://stack-of-tasks.github.io/pinocchio/download.html
 You'll also need to grab the FindCASADI.cmake file from Casadi, put it in the cmake folder, include it in the CMakeLists.txt, and rename it to Findcasadi.cmake.  
 
 # Starting
+We first set up ROS and get the robot model loaded, 
 `source urdf/devel/setup.bash`
 `roscore &`
 `roslaunch ur_description load_ur16e.launch`
