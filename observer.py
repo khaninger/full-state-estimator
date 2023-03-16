@@ -1,6 +1,7 @@
 import casadi as ca
 import numpy as np
 from robot import robot
+from scipy.stats import multivariate_normal
 
 class ekf():
     """ This defines an EKF observer """
@@ -41,7 +42,7 @@ class ekf():
                                      self.x.get('p', []),
                                      self.x.get('stiff', []))}
         #print(self.cov)
-        x_next = dyn_sys.disc_dyn.call(step_args)  # predict state and output at next time step
+        self.x_next = dyn_sys.disc_dyn.call(step_args)  # predict state and output at next time step
         A, C = dyn_sys.get_linearized(step_args)   # get the linearized dynamics and observation matrices
         #print(f"F_i = {self.dyn_sys.jacpinv(self.x['q']).T@x_next['tau_err']}")
         #print(f"tau_err = {x_next['tau_err']}")
@@ -49,35 +50,35 @@ class ekf():
         #print(step_args['tau_err'])
         #print(q-x_next['xi_next'][:6])
         #print(A)
-        cov_next = A@self.cov@(A.T) + self.proc_noise
+        self.cov_next = A@self.cov@(A.T) + self.proc_noise
         self.S = C@self.cov_next@(C.T) + self.meas_noise
-        self.y_hat = C@x_next
+        self.y_hat = C@self.x_next
         #print(cov_next)
-        self.L = cov_next@C.T@ca.inv(C@cov_next@(C.T) + self.meas_noise) # calculate Kalman gain
+        self.L = self.cov_next@C.T@ca.inv(C@self.cov_next@(C.T) + self.meas_noise) # calculate Kalman gain
         if np.any(np.isnan(self.L)): raise ValueError("Nans in the L matrix")
     
-        xi_corr = x_next['xi_next'] + self.L@(q - x_next['xi_next'][:self.dyn_sys.nq])
+        xi_corr = self.x_next['xi_next'] + self.L@(q - self.x_next['xi_next'][:self.dyn_sys.nq])
         #print((L@(q - x_next['xi_next'][:self.dyn_sys.nq]))[-3:])
         #print(xi_corr)
         self.x['q'] = xi_corr[:self.dyn_sys.nq].full()
         self.x['dq'] = xi_corr[self.dyn_sys.nq:2*self.dyn_sys.nq].full()
         if self.est_geom: self.x['p'] = xi_corr[2*self.dyn_sys.nq:].full()
         if self.est_stiff: self.x['stiff'] = xi_corr[2*self.dyn_sys.nq:].full().flatten()
-        self.x['cont_pt'] = x_next['cont_pt'].full().flatten()
+        self.x['cont_pt'] = self.x_next['cont_pt'].full().flatten()
         x_ee = self.dyn_sys.fwd_kin(self.x['q'])
         self.x['x_ee'] = (x_ee[0].full(),
                           x_ee[1].full())
         self.x['xi'] = xi_corr.full()
-        self.mom_obs.step(x_next['mom'], x_next['tau_err'])
+        self.mom_obs.step(self.x_next['mom'], self.x_next['tau_err'])
         self.x['f_ee_mo'] = (self.dyn_sys.jacpinv(self.x['q'])@self.mom_obs.r).full()
-        self.x['f_ee_obs'] = -(self.dyn_sys.jacpinv(self.x['q'])@x_next['tau_i']).full()
+        self.x['f_ee_obs'] = -(self.dyn_sys.jacpinv(self.x['q'])@self.x_next['tau_i']).full()
         
-        self.cov = (ca.DM.eye(self.dyn_sys.nx)-self.L@C)@cov_next # corrected covariance
+        self.cov = (ca.DM.eye(self.dyn_sys.nx)-self.L@C)@self.cov_next # corrected covariance
         #print(self.cov[-3:,-3:])
-        return self.x, self.cov, self.S, self.y_hat
+        return self.x, self.x_next, self.cov, self.cov_next, self.S, self.y_hat,
 
     def likelihood(self, obs):
-        return
+        return NotImplemented
 
 class MomentumObserver():
     ''' Mostly following https://elib.dlr.de/129060/1/root.pdf '''
