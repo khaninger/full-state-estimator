@@ -75,7 +75,7 @@ class ekf():
         
         self.cov = (ca.DM.eye(self.dyn_sys.nx)-self.L@C)@self.cov_next # corrected covariance
         #print(self.cov[-3:,-3:])
-        return self.x, self.x_next, self.cov, self.cov_next, self.S, self.y_hat,
+        return self.x, self.cov, self.S, self.y_hat,
 
     def likelihood(self, obs):
         return NotImplemented

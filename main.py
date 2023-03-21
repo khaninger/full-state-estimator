@@ -8,6 +8,7 @@ from sensor_msgs.msg import JointState
 from geometry_msgs.msg import WrenchStamped
 import casadi as ca
 from observer import ekf
+from Hybrid_filter import HybridParticleFilter
 from robot import robot
 from helper_fns import *
 from param_fit import *
@@ -31,10 +32,16 @@ def init_rosparams():
                      'geom':[1.5e6]*3,
                      'stiff':[6e15]*3}
     p['meas_noise'] = {'pos':np.array(rospy.get_param('meas_noise', [1e-1]*6))}
+    p['S_t0'] = {'pos':np.array(rospy.get_param('meas_noise', [1e-1]*6))}
+
     p['contact_1'] = {'pos':   ca.DM(rospy.get_param('contact_1_pos', [0]*3)),
                       'stiff': ca.DM(rospy.get_param('contact_1_stiff', [0]*3)),
                       'rest':  ca.DM(rospy.get_param('contact_1_rest', [-0.4, 0.3, 0.12]))}
     p['mom_obs_K'] = [20]*6
+    p['num_particles'] = 20
+    p['belief_init'] = np.array([0.7, 0.3])
+    p['transition_matrix'] = np.array([[0.8, 0.2], [0.2, 0.8]])
+
     
     return p
 
@@ -63,7 +70,7 @@ class ros_observer():
 
         self.params = init_rosparams()
         
-        self.observer = ekf(self.params,
+        self.observer = HybridParticleFilter(self.params,
                             np.array([2.29, -1.02, -0.9, -2.87, 1.55, 0.56]),
                             est_geom, est_stiff)
         
@@ -87,9 +94,9 @@ class ros_observer():
             print("Error loading ROS message in force_callback")
  
     def observer_update(self):
-        self.x = self.observer.step(q = self.q,
+        self.x = self.observer.RunFilter(q = self.q,
                                     tau = self.tau,
-                                    F = self.F)
+                                    F = self.F)[0]
 
     def publish_state(self):
         ddq = self.x.get('ddq', np.zeros(self.observer.dyn_sys.nq))
@@ -119,7 +126,7 @@ def generate_traj(bag, est_geom = False, est_stiff = False):
     force_unaligned = bag_loader(bag, map_wrench, topic_name = 'wrench')
     force = get_aligned_msgs(msgs, force_unaligned)
     
-    observer = ekf(p, msgs['pos'][:,0], est_geom, est_stiff)
+    observer = HybridParticleFilter(p, msgs['pos'][:,0], est_geom, est_stiff)
     num_msgs = len(msgs['pos'].T)
     
     states = np.zeros((observer.dyn_sys.nx, num_msgs))
@@ -143,7 +150,7 @@ def generate_traj(bag, est_geom = False, est_stiff = False):
         true_pos[:,i] = msgs['pos'][:,i]
         true_vel[:,i] = msgs['vel'][:,i]
         tic = time.perf_counter()
-        #res = observer.step(q = msgs['pos'][:,i], tau = msgs['torque'][:,i], dyn_sys=)
+        res = observer.RunFilter(q = msgs['pos'][:,i], tau = msgs['torque'][:,i])
         toc = time.perf_counter()
         update_freq.append(1/(toc-tic))
         states[:,i] = res['xi'].flatten()

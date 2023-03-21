@@ -6,47 +6,59 @@ from new_params import *
 from scipy.stats import multivariate_normal
 from observer import ekf
 from robot import robot
+import copy
 
-class HybridParticleFilter:
-    def __init__(self, mu_0, mode_0, )
+class HybridParticleFilter(ekf):
+    def __init__(self,  par, q0, est_geom = False, est_stiff = False):
+        ekf.__init__(self, par, q0, est_geom, est_stiff)
+        self.particles = []
+        self.num_particles = par['num_particles']
+        self.transition_matrix = par['transition_matrix']
+        self.belief_free = par['belief_init'][0]
+        self.belief_contact = par['belief_init'][1]
+        self.belief_init = par['belief_init']
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-        self.ekf = ekf(self.params,
-                            np.array([2.29, -1.02, -0.9, -2.87, 1.55, 0.56]),
-                            est_geom, est_stiff)
+        self.dyn_free = robot(par)
+        self.dyn_contact = robot(par, est_par=est_par)
+        self.y_hat = np.zeros((self.num_particles, 6, 1))
+        self.S_t = np.zeros((self.num_particles, 6, 6))
         for i in range(self.num_particles):
-            self.particles.append(Particle(mode_0, mu_0, P0, 1/N, y_hat0, S_t0, np.random.choice(['free-space', 'contact'], p=mode_0)))
-    def step(self):
-        for particle in self.particles:
+            self.particles.append(Particle(self.belief_init, self.x, self.cov, 1/self.num_particles, sampled_mode0='free-space'))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    def propagate(self, q, tau, F=None):
+        for i,particle in enumerate(self.particles):
             particle.mode = np.matmul(particle.mode_prev, self.trans_matrix)
             particle.sampled_mode = np.random.choice(['free-space', 'contact'], p=particle.mode)
             if particle.sampled_mode == 'free-space':
-                particle.mu = ekf.step(          dyn_sys=robot(par))[0]
-                particle.Sigma = ekf.step(          dyn_sys=robot(par))[2]
-                particle.S_t = ekf.step(          dyn_sys=robot(par))[4]
-                particle.y_hat = ekf.step(          dyn_sys=robot(par))[5]
+                particle.mu = ekf.step(q, tau, dyn_sys=self.dyn_free, F=None)[0]
+                particle.Sigma = ekf.step(q,tau, dyn_sys=self.dyn_free, F=None)[1]
+                self.S_t[i] = ekf.step(q, tau, dyn_sys=self.dyn_free, F=None)[2]
+                self.y_hat[i] = ekf.step(q, tau, dyn_sys=self.dyn_free, F=None)[3]
             elif particle.sampled_mode == 'contact':
-                particle.mu = ekf.step(dyn_sys=robot(par, est_par = est_par))[0]
-                particle.Sigma = ekf.step(dyn_sys=robot(par, est_par = est_par))[2]
-                particle.S_t = ekf.step(dyn_sys=robot(par, est_par = est_par))[4]
-                particle.y_hat = ekf.step(dyn_sys=robot(par, est_par = est_par))[5]
+                particle.mu = ekf.step(q, tau, dyn_sys=self.dyn_contact, F=None)[0]
+                particle.Sigma = ekf.step(q, tau, dyn_sys=self.dyn_contact, F=None)[1]
+                self.S_t[i] = ekf.step(q, tau, dyn_sys=self.dyn_contact, F=None)[2]
+                self.y_hat[i] = ekf.step(q, tau, dyn_sys=self.dyn_contact, F=None)[3]
 
-    def calc_weights(self, obs):
+    def calc_weights(self, q):
         summation = 0
-        for particle in self.particles:
-            particle.weight = multivariate_normal(mean=particle.y_hat, cov=particle.S_t).pdf(obs)
+        for i,particle in enumerate(self.particles):
+            particle.weight = multivariate_normal(mean=self.y_hat[i], cov=self.S_t[i]).pdf(q)
             if particle.weight<1e-15:
                 particle.weight = sys.float_info.epsilon
             summation += particle.weight
@@ -67,9 +79,9 @@ class HybridParticleFilter:
         vel = np.zeros(self.num_particles)
         x_env = np.zeros(self.num_particles)
         for i, particle in enumerate(self.particles):
-            pos[i] = particle.mu[0]
+            pos[i] = particle.mu['q']
             weights[i] = particle.weight
-            vel[i] = particle.mu[1]
+            vel[i] = particle.mu['dq']
         self.x_hat = np.average(pos, weights=weights, axis=0)
         self.x_dot_hat = np.average(vel, weights=weights, axis=0)
     def MultinomialResample(self):
@@ -89,14 +101,21 @@ class HybridParticleFilter:
 
         self.particles = resamp_parts
 
-    def RunFilter(self, z):
-        self.PropagateState()
-        self.CalcWeights(z)
+    def RunFilter(self, q, tau, F=None):
+        self.PropagateState(q,  tau, F=None)
+        self.CalcWeights(q)
         self.MultinomialResample()
         self.EstimateState()
         return self.x_hat, self.x_dot_hat, self.belief_free, self.belief_contact
 class Particle:
-    def __init__(self):
+    def __init__(self, mode_0, mu_0, P0, weight0, sampled_mode0):
+        self.mode = self.mode_prev = mode_0
+        self.mu = mu_0
+        self.Sigma = P0
+        self.weight = weight0
+        self.sampled_mode = sampled_mode0
+
+
 
 
 
