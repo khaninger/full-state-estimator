@@ -129,7 +129,7 @@ def generate_traj(bag, est_geom = False, est_stiff = False):
     observer = HybridParticleFilter(p, msgs['pos'][:,0], est_geom, est_stiff)
     num_msgs = len(msgs['pos'].T)
     
-    states = np.zeros((observer.dyn_sys.nx, num_msgs))
+    states = np.zeros((12, num_msgs))
     contact_pts = np.zeros((3, num_msgs))
     stiff = np.zeros((3, num_msgs))
     f_ee_mo = np.zeros((3, num_msgs))
