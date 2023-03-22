@@ -2,7 +2,7 @@ import pdb
 import sys
 import numpy as np
 import copy
-from new_params import *
+
 from scipy.stats import multivariate_normal
 from observer import ekf
 from robot import robot
