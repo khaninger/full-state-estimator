@@ -11,12 +11,12 @@ class ekf():
         self.est_geom = est_geom
         self.est_stiff = est_stiff
         
-        est_par = {}
+        self.est_par = {}
         if est_geom:
-            est_par = {'pos':ca.SX.sym('contact_1_pos',3)}
+            self.est_par = {'pos':ca.SX.sym('contact_1_pos',3)}
             self.x['p'] = 0.15*ca.DM.ones(3)
         if est_stiff:
-            est_par = {'stiff':ca.SX.sym('contact_1_stiff',3)}
+            self.est_par = {'stiff':ca.SX.sym('contact_1_stiff',3)}
             self.x['stiff'] = 1*ca.DM.ones(3)
 
         #self.dyn_sys = robot(par, est_par = est_par)
@@ -43,7 +43,11 @@ class ekf():
                                      self.x.get('stiff', []))}
         #print(self.cov)
         self.x_next = dyn_sys.disc_dyn.call(step_args)  # predict state and output at next time step
+
+        x_next = self.x_next["xi_next"]
+        print(x_next.shape)
         A, C = dyn_sys.get_linearized(step_args)   # get the linearized dynamics and observation matrices
+        print(C.shape)
         #print(f"F_i = {self.dyn_sys.jacpinv(self.x['q']).T@x_next['tau_err']}")
         #print(f"tau_err = {x_next['tau_err']}")
         #print(f"tau     = {tau}")
@@ -52,7 +56,7 @@ class ekf():
         #print(A)
         self.cov_next = A@self.cov@(A.T) + self.proc_noise
         self.S = C@self.cov_next@(C.T) + self.meas_noise
-        self.y_hat = C@self.x_next
+        self.y_hat = C@x_next
         #print(cov_next)
         self.L = self.cov_next@C.T@ca.inv(C@self.cov_next@(C.T) + self.meas_noise) # calculate Kalman gain
         if np.any(np.isnan(self.L)): raise ValueError("Nans in the L matrix")
