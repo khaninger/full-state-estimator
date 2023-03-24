@@ -99,7 +99,7 @@ class ros_observer():
                                     F = self.F)[0]
 
     def publish_state(self):
-        ddq = self.x.get('ddq', np.zeros(self.observer.dyn_sys.nq))
+        ddq = self.x.get('ddq', np.zeros(self.observer.dyn_free.nq))
         msg = build_jt_msg(self.x['q'], self.x['dq'],
                            np.concatenate((self.x.get('stiff',[]), self.x.get('cont_pt', []))))
         msg_f = build_jt_msg(q = self.x['f_ee_mo'], dq = self.x['f_ee_obs'], tau = self.F) 
