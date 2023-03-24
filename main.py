@@ -106,10 +106,10 @@ class ros_observer():
         if not rospy.is_shutdown():
             self.joint_pub.publish(msg)
             self.f_ee_obs_pub.publish(msg_f)
-        x, dx, ddx = self.observer.dyn_sys.get_tcp_motion(self.x['q'], self.x['dq'], ddq)
-        msg_ee = build_jt_msg(x[0].full(), dx.full(), ddx.full())
-        if not rospy.is_shutdown():
-            self.ee_pub.publish(msg_ee)
+        #x, dx, ddx = self.observer.dyn_sys.get_tcp_motion(self.x['q'], self.x['dq'], ddq)
+        #msg_ee = build_jt_msg(x[0].full(), dx.full(), ddx.full())
+        #if not rospy.is_shutdown():
+            #self.ee_pub.publish(msg_ee)
     def shutdown(self):
         print("Shutting down observer")
 
@@ -150,7 +150,7 @@ def generate_traj(bag, est_geom = False, est_stiff = False):
         true_pos[:,i] = msgs['pos'][:,i]
         true_vel[:,i] = msgs['vel'][:,i]
         tic = time.perf_counter()
-        res = observer.RunFilter(q = msgs['pos'][:,i], tau = msgs['torque'][:,i])
+        res = observer.RunFilter(q = msgs['pos'][:,i], tau = msgs['torque'][:,i])[0]
         toc = time.perf_counter()
         update_freq.append(1/(toc-tic))
         states[:,i] = res['xi'].flatten()
