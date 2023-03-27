@@ -20,10 +20,10 @@ class HybridParticleFilter(ekf):
 
         self.dyn_free = robot(par)
         self.dyn_contact = robot(par, est_par=self.est_par)
-        self.y_hat = np.zeros((self.num_particles, 6, 1))
-        self.S_t = np.zeros((self.num_particles, 6, 6))
+        self.y_est = np.zeros((self.num_particles, 6, 1))
+        self.S_est = np.zeros((self.num_particles, 6, 6))
         for i in range(self.num_particles):
-            self.particles.append(Particle(self.belief_init, self.x, self.cov, 1/self.num_particles, sampled_mode0='free-space'))
+            self.particles.append(Particle(self.belief_init, self.x, self.cov, 1/self.num_particles, sampled_mode0=np.random.choice(['free-space', 'contact'], p=self.belief_init)))
 
 
 
@@ -47,18 +47,32 @@ class HybridParticleFilter(ekf):
             if particle.sampled_mode == 'free-space':
                 particle.mu = ekf.step(self, q=q, tau=tau, dyn_sys=self.dyn_free)[0]
                 particle.Sigma = ekf.step(self, q=q, tau=tau, dyn_sys=self.dyn_free)[1]
-                self.S_t[i] = ekf.step(self, q=q, tau=tau, dyn_sys=self.dyn_free)[2]
-                self.y_hat[i] = ekf.step(self, q=q, tau=tau, dyn_sys=self.dyn_free)[3]
+
+                #print(particle.Sigma)
+                self.S_est[i] = ekf.step(self, q=q, tau=tau, dyn_sys=self.dyn_free)[2]
+
+                self.y_est[i] = ekf.step(self, q=q, tau=tau, dyn_sys=self.dyn_free)[3]
+                #print(self.y_est[i].shape)
+                #print(self.S_t[i].shape)
             elif particle.sampled_mode == 'contact':
                 particle.mu = ekf.step(self, q=q, tau=tau, dyn_sys=self.dyn_contact)[0]
                 particle.Sigma = ekf.step(self, q=q, tau=tau, dyn_sys=self.dyn_contact)[1]
-                self.S_t[i] = ekf.step(self, q=q, tau=tau, dyn_sys=self.dyn_contact)[2]
-                self.y_hat[i] = ekf.step(self, q=q, tau=tau, dyn_sys=self.dyn_contact)[3]
+                #print(particle.Sigma)
+                self.S_est[i] = ekf.step(self, q=q, tau=tau, dyn_sys=self.dyn_contact)[2]
+                self.y_est[i] = ekf.step(self, q=q, tau=tau, dyn_sys=self.dyn_contact)[3]
+            #print("debug1")
+            #print(self.S_est[i])
+            #print(np.linalg.eigvalsh(self.S_est[i]))
+            #print("debug transpose")
+            #print(print(self.S_est[i].T))
+            #print(particle.Sigma)
+            #print(particle.sampled_mode)
 
     def calc_weights(self, q):
         summation = 0
         for i,particle in enumerate(self.particles):
-            particle.weight = multivariate_normal(mean=self.y_hat[i], cov=self.S_t[i]).pdf(q)
+            #print(self.y_est[i].shape)
+            particle.weight = multivariate_normal(mean=self.y_est[i].ravel(), cov=self.S_est[i]).pdf(q)
             if particle.weight<1e-15:
                 particle.weight = sys.float_info.epsilon
             summation += particle.weight
@@ -67,6 +81,7 @@ class HybridParticleFilter(ekf):
             particle.weight /= summation
             if particle.weight == 0:
                 particle.weight = sys.float_info.epsilon
+            #print(particle.weight)
             self.weightsum += particle.weight
         self.belief_free = sum([particle.weight for particle in self.particles if particle.sampled_mode == 'free-space'])
         self.belief_contact = sum([particle.weight for particle in self.particles if particle.sampled_mode == 'contact'])

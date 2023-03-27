@@ -2,6 +2,7 @@ import casadi as ca
 import numpy as np
 from robot import robot
 from scipy.stats import multivariate_normal
+import copy
 
 class ekf():
     """ This defines an EKF observer """
@@ -45,20 +46,26 @@ class ekf():
         self.x_next = dyn_sys.disc_dyn.call(step_args)  # predict state and output at next time step
 
         x_next = self.x_next["xi_next"]
-        print(x_next.shape)
+        #print(x_next.shape)
         A, C = dyn_sys.get_linearized(step_args)   # get the linearized dynamics and observation matrices
-        print(C.shape)
+        #print(C.shape)
         #print(f"F_i = {self.dyn_sys.jacpinv(self.x['q']).T@x_next['tau_err']}")
         #print(f"tau_err = {x_next['tau_err']}")
         #print(f"tau     = {tau}")
         #print(step_args['tau_err'])
         #print(q-x_next['xi_next'][:6])
         #print(A)
-        self.cov_next = A@self.cov@(A.T) + self.proc_noise
-        self.S = C@self.cov_next@(C.T) + self.meas_noise
+        #print(np.argwhere(np.isnan(self.cov)))
+        cov_next = A@self.cov@(A.T) + self.proc_noise
+        #print(C)
+
+        #print(self.cov)
+        self.S = C@cov_next@(C.T) + self.meas_noise
         self.y_hat = C@x_next
+        #print(self.y_hat.shape)
         #print(cov_next)
-        self.L = self.cov_next@C.T@ca.inv(C@self.cov_next@(C.T) + self.meas_noise) # calculate Kalman gain
+        self.L = cov_next@C.T@ca.inv(C@cov_next@(C.T) + self.meas_noise) # calculate Kalman gain
+        #print(self.L.shape)
         if np.any(np.isnan(self.L)): raise ValueError("Nans in the L matrix")
     
         xi_corr = self.x_next['xi_next'] + self.L@(q - self.x_next['xi_next'][dyn_sys.nq])
@@ -77,7 +84,9 @@ class ekf():
         self.x['f_ee_mo'] = (dyn_sys.jacpinv(self.x['q'])@self.mom_obs.r).full()
         self.x['f_ee_obs'] = -(dyn_sys.jacpinv(self.x['q'])@self.x_next['tau_i']).full()
         
-        self.cov = (ca.DM.eye(dyn_sys.nx)-self.L@C)@self.cov_next # corrected covariance
+        self.cov = (ca.DM.eye(dyn_sys.nx)-self.L@C)@cov_next  # corrected covariance
+        #print("debug2")
+        print(self.cov)
         #print(self.cov[-3:,-3:])
         return self.x, self.cov, self.S, self.y_hat,
 

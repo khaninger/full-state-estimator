@@ -39,7 +39,7 @@ def init_rosparams():
                       'rest':  ca.DM(rospy.get_param('contact_1_rest', [-0.4, 0.3, 0.12]))}
     p['mom_obs_K'] = [20]*6
     p['num_particles'] = 20
-    p['belief_init'] = np.array([0.7, 0.3])
+    p['belief_init'] = np.array([0.8, 0.2])
     p['transition_matrix'] = np.array([[0.8, 0.2], [0.2, 0.8]])
 
     
