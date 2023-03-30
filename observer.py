@@ -83,7 +83,7 @@ class ekf():
         x_next = self.x_next["xi_next"]
         #print(x_next.shape)
         A, C = dyn_sys.get_linearized(step_args)   # get the linearized dynamics and observation matrices
-        #print(C.shape)
+        #print(A)
         #print(f"F_i = {self.dyn_sys.jacpinv(self.x['q']).T@x_next['tau_err']}")
         #print(f"tau_err = {x_next['tau_err']}")
         #print(f"tau     = {tau}")
@@ -100,6 +100,7 @@ class ekf():
         #print(self.y_hat.shape)
         #print(self.cov_next)
         self.L = self.cov_next@C.T@ca.inv(C@self.cov_next@(C.T) + self.meas_noise) # calculate Kalman gain
+        #print(self.L)
         #print(self.L.shape)
         if np.any(np.isnan(self.L)): raise ValueError("Nans in the L matrix")
     

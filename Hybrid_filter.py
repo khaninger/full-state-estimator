@@ -9,8 +9,8 @@ from robot import robot
 from observer import static_ekf_update
 
 
-class HybridParticleFilter(ekf):
-    def __init__(self,  par, q0, est_geom = False, est_stiff = False):
+class HybridParticleFilter:
+    def __init__(self,  par, q0, est_geom=False, est_stiff=False):
         ekf.__init__(self, par, q0, est_geom, est_stiff)
 
         self.particles = []
@@ -25,7 +25,7 @@ class HybridParticleFilter(ekf):
         self.y_est = np.zeros((self.num_particles, 6, 1))
         self.S_est = np.zeros((self.num_particles, 6, 6))
         for i in range(self.num_particles):
-            self.particles.append(Particle(self.belief_init, self.x, self.cov, 1/self.num_particles, sampled_mode0=np.random.choice(['free-space', 'contact'], p=self.belief_init)))
+            self.particles.append(Particle(par, q0, est_geom, est_stiff))
 
     def step_ekf(self, q, tau, dyn_sys, x, cov, F=None):
         """ Steps the observer based on the input at time t and observation at time t
@@ -36,7 +36,7 @@ class HybridParticleFilter(ekf):
                                       x.get('stiff', []))}
         # print(self.cov)
         x_next = dyn_sys.disc_dyn.call(step_args)  # predict state and output at next time step
-        print(x_next)
+        #print(x_next)
         x_next = x_next["xi_next"]
         # print(x_next.shape)
         A, C = dyn_sys.get_linearized(step_args)  # get the linearized dynamics and observation matrices
@@ -100,16 +100,19 @@ class HybridParticleFilter(ekf):
 
 
     def propagate(self, q, tau, F=None):
+
         for i,particle in enumerate(self.particles):
             particle.mode = np.matmul(particle.mode_prev, self.trans_matrix)
             particle.sampled_mode = np.random.choice(['free-space', 'contact'], p=particle.mode)
             #particle.mu = copy.deepcopy(particle.mu)
             #particle.Sigma = copy.deepcopy(particle.Sigma)
+            #print("debug")
+            #print(particle.mode)
 
             if particle.sampled_mode == 'free-space':
-                res = self.step_ekf(q=q, tau=tau, dyn_sys=self.dyn_contact, x=self.x, cov=self.cov)
+                #res = self.step_ekf(q=q, tau=tau, dyn_sys=self.dyn_contact, x=self.x, cov=self.cov)
                 #particle.mu = self.step(q=q, tau=tau, dyn_sys=self.dyn_contact)[0]
-                #self.S_est[i], self.y_est[i] = particle.step(q=q, tau=tau, dyn_sys=self.dyn_free)[-2:]
+                particle.mu, particle.Sigma, self.S_est[i], self.y_est[i] = particle.step(q=q, tau=tau, dyn_sys=self.dyn_free)
                 #particle.mu, particle.Sigma, self.S_est[i], self.y_est[i] = static_ekf_update(cov=self.cov, x=self.x, q=q, tau=tau, dyn_sys=self.dyn_free, proc_noise=self.proc_noise, meas_noise=self.meas_noise, est_geom=self.est_geom, est_stiff=self.est_stiff)
                 #particle.mu, particle.Sigma, self.S_est[i], self.y_est[i] = self.step_ekf(q=q, tau=tau, dyn_sys=self.dyn_free, x=self.x, cov=self.cov)
 
@@ -119,12 +122,12 @@ class HybridParticleFilter(ekf):
                 #print(self.y_est[i].shape)
                 #print(self.S_t[i].shape)
             elif particle.sampled_mode == 'contact':
-                res = self.step_ekf(q=q, tau=tau, dyn_sys=self.dyn_contact, x=self.x, cov=self.cov)
+                #res = self.step_ekf(q=q, tau=tau, dyn_sys=self.dyn_contact, x=self.x, cov=self.cov)
 
                 #particle.mu, particle.Sigma, self.S_est[i], self.y_est[i] = self.step_ekf(q=q, tau=tau, dyn_sys=self.dyn_contact, x=self.x, cov=self.cov)
 
                 # if particle inherits ekf
-                #self.S_est[i], self.y_est[i] = particle.step(q=q, tau=tau, dyn_sys=self.dyn_contact)[-2:]
+                particle.mu, particle.Sigma, self.S_est[i], self.y_est[i] = particle.step(q=q, tau=tau, dyn_sys=self.dyn_contact)
 
 
                 #particle.mu = self.step(q=q, tau=tau, dyn_sys=self.dyn_contact)[0]
@@ -134,18 +137,21 @@ class HybridParticleFilter(ekf):
                 #self.y_est[i] = self.step(q=q, tau=tau, dyn_sys=self.dyn_contact)[3]
             #print("debug1")
             print(particle.Sigma)
+            #print(np.linalg.eigvalsh(particle.cov))
 
-            #print(self.y_est[i].shape)
+            #print(self.y_est[i])
             #print(np.linalg.eigvalsh(self.S_est[i]))
             #print("debug transpose")
             #print(print(self.S_est[i].T))
             #print(particle.sampled_mode)
+            #print(particle.mu['q'])
 
     def calc_weights(self, q):
         summation = 0
         for i,particle in enumerate(self.particles):
-            #print(self.y_est[i].shape)
+            #print(np.linalg.eigvalsh(self.S_est[i]))
             particle.weight = multivariate_normal(mean=self.y_est[i].ravel(), cov=self.S_est[i]).pdf(q)
+            #print(particle.weight)
             if particle.weight<1e-15:
                 particle.weight = sys.float_info.epsilon
             summation += particle.weight
@@ -162,14 +168,18 @@ class HybridParticleFilter(ekf):
             particle.mode_prev = np.array([self.belief_free, self.belief_contact])
 
     def estimate_state(self):
-        pos = np.zeros(self.num_particles)
+        pos = np.zeros((self.num_particles, self.dyn_free.nq))
+        #print(pos.shape)
         weights = np.zeros(self.num_particles)
-        vel = np.zeros(self.num_particles)
+        vel = np.zeros((self.num_particles, self.dyn_free.nq))
         #x_env = np.zeros(self.num_particles)
         for i, particle in enumerate(self.particles):
-            pos[i] = particle.mu['q']
+            #print(pos[i, :])
+            #print(particle.mu)
+            pos[i,:] = particle.mu['q'].ravel()
+            #print(pos[i,:])
             weights[i] = particle.weight
-            vel[i] = particle.mu['dq']
+            vel[i,:] = particle.mu['dq'].ravel()
         self.x_hat = np.average(pos, weights=weights, axis=0)
         self.x_dot_hat = np.average(vel, weights=weights, axis=0)
     def MultinomialResample(self):
@@ -197,13 +207,13 @@ class HybridParticleFilter(ekf):
         return self.x_hat, self.x_dot_hat, self.belief_free, self.belief_contact
 
 class Particle(ekf):
-    def __init__(self, mode_0, mu_0, P0, weight0, sampled_mode0):
-        #ekf.__init__(self, par, q0, est_geom, est_stiff)
-        self.mode = self.mode_prev = mode_0
-        self.mu = mu_0
-        self.Sigma = P0
-        self.weight = weight0
-        self.sampled_mode = sampled_mode0
+    def __init__(self, par, q0=np.array([2.29, -1.02, -0.9, -2.87, 1.55, 0.56]), est_geom=False, est_stiff=False):
+        ekf.__init__(self, par, q0, est_geom, est_stiff)
+        self.mode = self.mode_prev = par['belief_init']
+        self.mu = self.x
+        self.Sigma = self.cov
+        self.weight = par['weight0']
+        self.sampled_mode = par['sampled_mode']
 
 
 
