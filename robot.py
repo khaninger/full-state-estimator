@@ -5,6 +5,7 @@ import casadi as ca
 from casadi_kin_dyn import pycasadi_kin_dyn
 
 
+
 class robot():
     """ This class handles the loading of robot dynamics/kinematics, the discretization/integration, and linearization
         This class should be stateless (e.g. the actual system state shouldn't be stored here).
@@ -17,7 +18,7 @@ class robot():
         self.contact_displacements = [] # signed distance functions
         self.contact_pts = []           # list of contact models
         self.vars = {}                  # dictionary of state
-        self.jit_options = {} #{'jit':True, 'compiler':'shell', "jit_options":{"compiler":"gcc", "flags": ["-O3"]}}
+        self.jit_options = {}#{'jit':True, 'compiler':'shell', "jit_options":{"compiler":"gcc", "flags": ["-Ofast"]}}
 
         self.load_kin_dyn(par['urdf'], par['urdf_path'])
         self.build_vars(est_par)
@@ -46,10 +47,15 @@ class robot():
         else:
             F_i = -contact_model['stiff'].T@(x_i-contact_model['rest'])
         tau_i = J_i.T@F_i
-        #contact_i = ca.Function('contact', [self.vars['q']], [tau_i], ['q'], ['tau_i'])
         self.contacts.append(tau_i)
-        #print(self.contacts[0])
 
+    def get_full_statedict(self, xi):
+        # returns a statedict with all the bonus things (contact point, forces, etc) from state
+        
+        
+    def statedict_to_vec(self, d):
+        # Takes dict arg
+        
     def load_kin_dyn(self, urdf, urdf_path):
         self.model = pin.buildModelsFromUrdf(urdf_path, verbose = True)[0]
         self.data = self.model.createData()
@@ -84,7 +90,6 @@ class robot():
         J = ca.jacobian(self.x_ee[0], q)
         Jd = ca.jacobian(J.reshape((np.prod(J.shape),1)), q)@dq # Jacobian on a matrix is tricky so we make a vector
         Jd = Jd.reshape(J.shape)@dq # then reshape the result into the right shape
-        #Jd = cpin.computeForwardKinematicsDerivatives(self.cmodel, self.cdata, q, dq)
         
         self.jac = ca.Function('jacobian', [q], [J], ['q'], ['Jac'])
         self.jacpinv = ca.Function('jac_pinv', [q], [ca.pinv(J.T)], ['q'], ['pinv']) 
@@ -99,75 +104,66 @@ class robot():
         q = self.vars['q']
         dq = self.vars['dq']
         tau = self.vars['tau']
-        
+        B = ca.diag(self.fric_model['visc'])
         tau_err = tau - cpin.computeGeneralizedGravity(self.cmodel, self.cdata, q)
 
-        #Minv = cpin.computeMinverse(self.cmodel, self.cdata, q)
-        M = cpin.crba(self.cmodel, self.cdata, q)
-        Minv = ca.inv(M+ca.diag(np.array([0.5, 0.5, 0.5, 0.25, 0.25, 0.25])))
-        #Minv_fn = ca.Function('minv', [q], [Minv])
-        #print(Minv_fn( np.array([2.29, -1.02, -0.9, -2.87, 1.55, 0.56])))
-        tau_i, disp, cont_pt = self.get_contact_forces(q, dq)
-        tau_f = -dq*self.fric_model['visc']
-        ddq =  Minv@(tau_err+tau_i)#+tau_f)
-        #q_test = np.array([2.29, -1.02, -0.9, -2.87, 1.55, 0.56])
-        #dq_test = 0.1*np.ones(6)
-        #tau_g_fn = ca.Function('tau_g', [q], [cpin.computeGeneralizedGravity(self.cmodel, self.cdata, q)])
-        #tau_g_eval = tau_g_fn(q_test)
-        #ddq_fn = ca.Function('ddq', [q, dq, tau], [ddq])
-        #print(ddq_fn.get_free())
-        #print(f'ddq: {ddq_fn(q_test, dq_test, tau_g_eval+0.1*np.ones(6))}')
-        
-        mom = M@dq
-        fn_dict = {'xi':self.vars['xi'],
-                   'tau':tau, 'tau_err':tau_err,
-                   'tau_i': tau_i, 'mom': mom,
-                   'disp':disp, 'cont_pt':cont_pt}
-        fn_dict.update(opt_par)
+        M = cpin.crba(self.cmodel, self.cdata, q)+ca.diag(np.array([0.5, 0.5, 0.5, 0.25, 0.25, 0.25]))
+        Mtilde_inv = ca.inv(M+h*B)
+        semiimplicit = (ca.DM.eye(self.nq)+h*ca.inv(M)@ca.diag(self.fric_model['visc']))
 
-        semiimplicit = (ca.DM.eye(self.nq)+h*Minv@ca.diag(self.fric_model['visc']))
+        tau_i, disp, cont_pt = self.get_contact_forces(q, dq)
         
+        # Old-fashioned dynamics
+        ddq =  ca.inv(M)@(tau_err+tau_i)
         dq_next= ca.inv(semiimplicit)@(dq + h*ddq)
         q_next = q + h*dq_next
-        fn_dict['xi_next'] = ca.vertcat(q_next, dq_next, self.vars.get('est_pars', []))
-        #print(ca.jacobian(q_next, self.vars['xi'])[:,-3:])
-        #dq_next_test = ca.Function('dq', [q, dq, tau], [dq_next])
-        #print(f'dq_next: {dq_next_test(q_test, dq_test, tau_g_eval+2.1*np.ones(6))}')
+        xi_next = ca.vertcat(q_next, dq_next, self.vars.get('est_pars', []))
+
+        fn_dict = {'xi':self.vars['xi'], 'xi_next': xi_next, 'tau':tau}
+        fn_dict.update(opt_par)
         
         self.disc_dyn =  ca.Function('disc_dyn', fn_dict,
                                      ['xi', 'tau', *opt_par.keys()],
-                                     ['xi_next', 'disp', 'cont_pt', 'tau_i', 'tau_err', 'mom'], self.jit_options).expand()
-        self.build_lin_matrices(h)
-    
-    def build_lin_matrices(self, h):
-        """ Makes the linearized dynamic matrix A for semi-explicit integrator
-            h: time step in seconds
-        """
-        q = self.vars['q']
-        dq = self.vars['dq']
-        fn_dict = {'xi':self.vars['xi'],
-                   'tau':self.vars['tau']}
-        #print(self.vars['xi'])
-        res = self.disc_dyn.call(fn_dict)
+                                     ['xi_next'], self.jit_options).expand()
         
-        fn_dict['A'] = ca.jacobian(res['xi_next'], self.vars['xi'])
-        
-        self.A_fn = ca.Function('A', fn_dict,  
-                                ['xi', 'tau'],['A'], self.jit_options).expand()
+        fn_dict['A'] = ca.jacobian(fn_dict['xi_next'], self.vars['xi'])
+        self.A = ca.Function('A', {k:fn_dict[k] for k in ('A', 'xi', 'tau')},  
+                                ['xi', 'tau'],['A'], self.jit_options).expand()        
         self.C =  np.hstack((np.eye(self.nq), np.zeros((self.nq, self.nx-self.nq))))
-        '''
-        ddq = self.get_ddq(q, dq, tau_err)
-        ddq_q = ca.jacobian(ddq, q)
-        ddq_dq = ca.jacobian(ddq, dq)
-        I = ca.DM.eye(self.nq)
-        A = ca.vertcat(ca.horzcat(I + h*h*ddq_q, h*h*ddq_dq),
-                       ca.horzcat(h*ddq_q,   I + h*ddq_dq))
 
-        fn_dict = {'q': q, 'dq': dq, 'tau_err': tau_err, 'A': A}
-        self.A_fn =  ca.Function('A', fn_dict,
-                                 ['q', 'dq', 'tau_err'],['A'])
-        '''
+        # New dynamics
+        delta = Mtilde_inv@(-B@dq + tau_err + tau_i)
+        fn_dict = {'xi':self.vars['xi'],
+                   'tau':tau}
+        fn_dict.update(opt_par)
 
+        dq_next= dq + h*delta
+        q_next = q + h*dq_next
+        fn_dict['xi_next'] = ca.vertcat(q_next, dq_next, self.vars.get('est_pars', []))
+        self.vars['xi_next'] = fn_dict['xi_next']       
+        self.disc_dyn_opt =  ca.Function('disc_dyn', fn_dict,
+                                     ['xi', 'tau', *opt_par.keys()],
+                                     ['xi_next'], self.jit_options).expand()    
+        
+        nq = self.nq
+        nq2 = 2*self.nq
+
+        ddelta_dq = Mtilde_inv@ca.jacobian(tau_i, q) #ignoring derivative of Mtilde_inv wrt q, ~5x speedup
+        ddelta_ddq = -Mtilde_inv@B
+        ddelta_dp = Mtilde_inv@ca.jacobian(tau_i, self.vars['xi'][nq2:]) #ignoring derivative of Mtilde_inv wrt q, ~5x speedup
+
+        A = ca.SX.eye(self.nx)
+        A[:nq, :nq] +=  h*h*ddelta_dq
+        A[:nq, nq:nq2] += h*ca.SX.eye(nq)+h*h*ddelta_ddq
+        A[:nq, nq2:] += h*h*ddelta_dp
+        A[nq:nq2, :nq] += h*ddelta_dq
+        A[nq:nq2, nq:nq2] += h*ddelta_ddq
+
+        self.A_opt =  ca.Function('A', {'xi': self.vars['xi'], 'tau': tau, 'A': A},
+                                 ['xi', 'tau'],['A'], self.jit_options).expand()
+
+        self.C =  np.hstack((np.eye(self.nq), np.zeros((self.nq, self.nx-self.nq))))
+        
     def get_tcp_motion(self, q, dq, ddq):
         x = self.fwd_kin(q)
         dx = self.d_fwd_kin(q, dq)
@@ -175,7 +171,10 @@ class robot():
         return x, dx, ddx
 
     def get_linearized(self, state):
-        return self.A_fn.call(state)['A'], self.C
+        return self.A.call(state)['A'], self.C
+
+    def get_linearized_opt(self, state):
+        return self.A_opt.call(state)['A'], self.C
 
     def get_contact_forces(self, q, dq):
         """ Returns the state-dependent external forces

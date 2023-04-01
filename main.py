@@ -32,7 +32,7 @@ def init_rosparams():
                      'stiff':[6e15]*3}
     p['meas_noise'] = {'pos':np.array(rospy.get_param('meas_noise', [1e-1]*6))}
     p['contact_1'] = {'pos':   ca.DM(rospy.get_param('contact_1_pos', [0]*3)),
-                      'stiff': ca.DM(rospy.get_param('contact_1_stiff', [0]*3)),
+                      'stiff': ca.DM(rospy.get_param('contact_1_stiff', [100]*3)),
                       'rest':  ca.DM(rospy.get_param('contact_1_rest', [-0.4, 0.3, 0.12]))}
     p['mom_obs_K'] = [20]*6
     
@@ -144,14 +144,15 @@ def generate_traj(bag, est_geom = False, est_stiff = False):
         true_vel[:,i] = msgs['vel'][:,i]
         tic = time.perf_counter()
         res = observer.step(q = msgs['pos'][:,i], tau = msgs['torque'][:,i])
+        #print(observer.cov)
         toc = time.perf_counter()
         update_freq.append(1/(toc-tic))
         states[:,i] = res['xi'].flatten()
-        contact_pts[:,i] = res['cont_pt'].flatten()
-        stiff[:,i] = res.get('stiff',np.zeros(3)).flatten()
-        f_ee_mo[:,i] = res['f_ee_mo'].flatten()
-        f_ee_obs[:,i] = res['f_ee_obs'].flatten()
-        x_ees += [res['x_ee']]
+        #contact_pts[:,i] = res['cont_pt'].flatten()
+        #stiff[:,i] = res.get('stiff',np.zeros(3)).flatten()
+        #f_ee_mo[:,i] = res['f_ee_mo'].flatten()
+        #f_ee_obs[:,i] = res['f_ee_obs'].flatten()
+        #x_ees += [res['x_ee']]
     average_freq = (sum(update_freq)/traj_len)/1000
     print("Average update frequency is {} kHz".format(average_freq))
     fname = bag[:-4]+'.pkl'
