@@ -8,7 +8,7 @@ from sensor_msgs.msg import JointState
 from geometry_msgs.msg import WrenchStamped
 
 from observer import ekf
-from robot import robot
+from robot import Robot
 from helper_fns import *
 from param_fit import *
 import time
@@ -31,10 +31,12 @@ def init_rosparams():
                      'geom':[1.5e6]*3,
                      'stiff':[6e15]*3}
     p['meas_noise'] = {'pos':np.array(rospy.get_param('meas_noise', [1e-1]*6))}
-    p['contact_1'] = {'pos':   ca.DM(rospy.get_param('contact_1_pos', [0]*3)),
-                      'stiff': ca.DM(rospy.get_param('contact_1_stiff', [100]*3)),
-                      'rest':  ca.DM(rospy.get_param('contact_1_rest', [-0.4, 0.3, 0.12]))}
+    p['contact_models'] = ['contact1'] # No underscores! That's used to split
+    p['contact1_pos']   = ca.DM(rospy.get_param('contact1_pos', [0]*3))
+    p['contact1_stiff'] = ca.DM(rospy.get_param('contact1_stiff', [0]*3))
+    p['contact1_rest']  = ca.DM(rospy.get_param('contact1_rest', [-0.4, 0.3, 0.12]))}
     p['mom_obs_K'] = [20]*6
+    p['q0'] = np.array([2.29, -1.02, -0.9, -2.87, 1.55, 0.56])
     
     return p
 
@@ -63,9 +65,7 @@ class ros_observer():
 
         self.params = init_rosparams()
         
-        self.observer = ekf(self.params,
-                            np.array([2.29, -1.02, -0.9, -2.87, 1.55, 0.56]),
-                            est_geom, est_stiff)
+        self.observer = ekf(self.params, est_geom, est_stiff)
         
     def joint_callback(self, msg):
         """ To be called when the joint_state topic is published with joint position and torques """
@@ -181,7 +181,7 @@ def param_fit(bag):
     rob = robot(p, p_to_opt)
     optimized_par = optimize(states.T, inputs.T, p_to_opt, rob.disc_dyn, prediction_skip)
     for k,v in optimized_par.items():
-        rospy.set_param('contact_1_'+k, v.full().tolist())
+        rospy.set_param('contact1_'+k, v.full().tolist())
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

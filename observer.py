@@ -29,9 +29,9 @@ class ekf():
 
         
         self.x['cov'] = np.diag(np.concatenate((par['cov_init']['pos'],
-                                           par['cov_init']['vel'],
-                                           par['cov_init']['geom'] if est_geom else [],
-                                           par['cov_init']['stiff'] if est_stiff else [])))
+                                                par['cov_init']['vel'],
+                                                par['cov_init']['geom'] if est_geom else [],
+                                                par['cov_init']['stiff'] if est_stiff else [])))
         
         self.meas_noise = np.diag(par['meas_noise']['pos'])
 
@@ -70,7 +70,6 @@ class ekf():
         self.x['cov'] = res['cov_next']
         return self.x
 
-    
     def step(self, q, tau, F = None):
         """ Steps the observer baed on the input at time t and observation at time t
             Standard EKF update, see, e.g. pg. 51 in Thrun "Probabilistic Robotics" """

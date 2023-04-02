@@ -4,58 +4,34 @@ import numpy as np
 import casadi as ca
 from casadi_kin_dyn import pycasadi_kin_dyn
 
+from contact import Contact
 
-
-class robot():
+class Robot():
     """ This class handles the loading of robot dynamics/kinematics, the discretization/integration, and linearization
         This class should be stateless (e.g. the actual system state shouldn't be stored here).
     """
-    def __init__(self, par, opt_par = {}, est_par = {}):
+    def __init__(self, par, opt_par = {}, est_pars = {}):
+        """ IN: par is the complete parameter dictionary
+            IN: opt_par is a dict, containing the sym vars directly
+            IN: est_par is a dict, key is contact name, value is list of params
+        """
+
         print("Building robot with contact pars: {}".format(par['contact_1']))
         print("optimization pars: {}".format(opt_par))
         print("estimation pars:   {}".format(est_par))
-        self.contacts = []
-        self.contact_displacements = [] # signed distance functions
-        self.contact_pts = []           # list of contact models
-        self.vars = {}                  # dictionary of state
+    
+        self.vars = {}       # dictionary of state as symbolic variables
         self.jit_options = {}#{'jit':True, 'compiler':'shell', "jit_options":{"compiler":"gcc", "flags": ["-Ofast"]}}
 
+        self.contact = Contact()
+        
         self.load_kin_dyn(par['urdf'], par['urdf_path'])
-        self.build_vars(est_par)
+        self.build_vars(par, opt_par, est_par)
         self.build_fwd_kin()
-
-        # Add contact model
-        par['contact_1'].update(opt_par)
-        par['contact_1'].update(est_par)
-        self.add_contact(par['contact_1'])
-        self.fric_model = par['fric_model']
-
+                        
+        self.contact.build_contact(par, self.vars['q'], self.x_ee)
         self.build_disc_dyn(par['h'], opt_par, est_par)
-
-    def add_contact(self, contact_model):
-        """ Add the contact_model to the robot """
-        x_i = self.x_ee[0]+self.x_ee[1]@contact_model['pos']
-        cont_i = ca.Function('cont', [self.vars['q']], [x_i], ['q'], ['x_i'])
-        self.contact_pts.append(cont_i)
-        disp_i = ca.Function('disp',[self.vars['q']],
-                             [x_i - contact_model['rest']], ['q'],['xd'])
-        self.contact_displacements.append(disp_i)
-        n_i = contact_model['stiff']/ca.norm_2(contact_model['stiff'])
-        J_i = ca.jacobian(n_i.T@x_i, self.vars['q'])
-        if isinstance(contact_model['stiff'], np.ndarray):
-            F_i = -ca.DM(contact_model['stiff']).T@(x_i-contact_model['rest'])
-        else:
-            F_i = -contact_model['stiff'].T@(x_i-contact_model['rest'])
-        tau_i = J_i.T@F_i
-        self.contacts.append(tau_i)
-
-    def get_full_statedict(self, xi):
-        # returns a statedict with all the bonus things (contact point, forces, etc) from state
-        
-        
-    def statedict_to_vec(self, d):
-        # Takes dict arg
-        
+            
     def load_kin_dyn(self, urdf, urdf_path):
         self.model = pin.buildModelsFromUrdf(urdf_path, verbose = True)[0]
         self.data = self.model.createData()
@@ -65,21 +41,25 @@ class robot():
         self.fwd_kin  = ca.Function.deserialize(kindyn.fk('tool0'))
         self.nq = self.model.nq
 
-    def build_vars(self, est_pars):
+    def build_vars(self, par, opt_pars, est_pars):
         self.vars['q'] = ca.SX.sym('q', self.nq)
-        self.vars['dq'] = ca.SX.sym('dq', self.nq)
-        self.vars['est_pars'] = ca.vertcat(*est_pars.values())
-
-        self.vars['xi'] = ca.vertcat(self.vars['q'], self.vars['dq'], self.vars['est_pars'])
-        
-        self.vars['ddq']= ca.SX.sym('ddq', self.nq)
+        self.vars['dq'] = ca.SX.sym('dq', self.nq)        
         self.vars['tau'] = ca.SX.sym('tau', self.nq)
+
+        self.vars['est_pars'], xii_con, ci_con, pn_con = self.contact.build_vars(par, est_pars)
         
-        self.np = 0
-        for v in est_pars.values():
-            self.np += v.size()[0]
-        self.nx = 2*self.nq+self.np
+        xi_init = [par['q0'], ca.DM.zeros(par['q0']), *xii_con]
+        cov_init_vec = [par['cov_init']['pos'], par['cov_init']['vel'], *ci_con]
+        proc_noise_vec = [par['proc_noise']['pos'], par['proc_noise']['vel'], *pn_con]
+        
+        self.xi_init = ca.vertcat(*xi_init)
+        self.cov_init = ca.diag(ca.vertcat(*cov_init_vec))
+        self.proc_noise = ca.diag(ca.vertcat(*proc_noise_vec))
+
+        self.nx = 2*self.nq+self.contact.np
         self.ny = self.nq
+
+        par.update(opt_pars)
         
     def build_fwd_kin(self):
         q = self.vars['q']
@@ -96,11 +76,8 @@ class robot():
         self.djac = ca.Function('dot_jacobian',  [q, dq], [Jd])
         
         self.d_fwd_kin = ca.Function('dx', [q, dq], [J@dq], ['q', 'dq'], ['dx'])
-        self.dd_fwd_kin = ca.Function('ddx', [q, dq, self.vars['ddq']],
-                                      [Jd + J@self.vars['ddq']],
-                                      ['q', 'dq', 'ddq'], ['ddx'])
     
-    def build_disc_dyn(self, h, opt_par, est_par):
+    def build_disc_dyn(self, h, opt_par):
         q = self.vars['q']
         dq = self.vars['dq']
         tau = self.vars['tau']
@@ -167,8 +144,7 @@ class robot():
     def get_tcp_motion(self, q, dq, ddq):
         x = self.fwd_kin(q)
         dx = self.d_fwd_kin(q, dq)
-        ddx = self.dd_fwd_kin(q, dq, ddq)
-        return x, dx, ddx
+        return x, dx
 
     def get_linearized(self, state):
         return self.A.call(state)['A'], self.C
@@ -176,20 +152,3 @@ class robot():
     def get_linearized_opt(self, state):
         return self.A_opt.call(state)['A'], self.C
 
-    def get_contact_forces(self, q, dq):
-        """ Returns the state-dependent external forces
-            q: joint pose
-            dq: joint velocity
-        """
-        tau = 0
-        for con in self.contacts:
-            tau += con
-        disp = []
-        for d in self.contact_displacements:
-            disp.append(d(q))
-        disp = ca.vertcat(*disp)
-        cont_pt = []
-        for p in self.contact_pts:
-            cont_pt.append(p(q))
-        cont_pt = ca.vertcat(*cont_pt)
-        return tau, disp, cont_pt
