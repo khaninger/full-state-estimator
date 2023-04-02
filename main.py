@@ -31,10 +31,10 @@ def init_rosparams():
                      'geom':[1.5e6]*3,
                      'stiff':[6e15]*3}
     p['meas_noise'] = {'pos':np.array(rospy.get_param('meas_noise', [1e-1]*6))}
-    p['contact_models'] = ['contact1'] # No underscores! That's used to split
-    p['contact1_pos']   = ca.DM(rospy.get_param('contact1_pos', [0]*3))
-    p['contact1_stiff'] = ca.DM(rospy.get_param('contact1_stiff', [0]*3))
-    p['contact1_rest']  = ca.DM(rospy.get_param('contact1_rest', [-0.4, 0.3, 0.12]))}
+    p['contact_models'] = ['contact_1'] # No underscores! That's used to split
+    p['contact_1_pos']   = ca.DM(rospy.get_param('contact_1_pos', [1]*3))
+    p['contact_1_stiff'] = ca.DM(rospy.get_param('contact_1_stiff', [1]*3))
+    p['contact_1_rest']  = ca.DM(rospy.get_param('contact_1_rest', [-0.4, 0.3, 0.12]))
     p['mom_obs_K'] = [20]*6
     p['q0'] = np.array([2.29, -1.02, -0.9, -2.87, 1.55, 0.56])
     
@@ -44,7 +44,7 @@ class ros_observer():
     """ This handles the ros interface, loads models, etc
     """
     def __init__(self, joint_topic = 'joint_states',
-                 force_topic = 'wrench', est_geom = False, est_stiff = False):
+                 force_topic = 'wrench', est_pars = {}):
         
         self.q = None        # joint position
         self.tau_err = None  # torque error
@@ -64,8 +64,9 @@ class ros_observer():
         self.f_ee_mo_pub  = rospy.Publisher('force_ee_mo',  JointState, queue_size=1)
 
         self.params = init_rosparams()
-        
-        self.observer = ekf(self.params, est_geom, est_stiff)
+
+        self.robot = Robot(self.params, est_pars = est_pars)
+        self.observer = ekf(self.robot)
         
     def joint_callback(self, msg):
         """ To be called when the joint_state topic is published with joint position and torques """
@@ -106,61 +107,54 @@ class ros_observer():
     def shutdown(self):
         print("Shutting down observer")
 
-def start_node(est_geom = False, est_stiff = False):
+def start_node(est_pars):
     rospy.init_node('observer')
-    node = ros_observer(est_geom = est_geom, est_stiff = est_stiff)
+    node = ros_observer(est_pars)
     rospy.on_shutdown(node.shutdown)  # Set shutdown to be executed when ROS exits
     rospy.spin()
 
-def generate_traj(bag, est_geom = False, est_stiff = False):
+def generate_traj(bag, est_pars):
     print('Generating trajectory from {}'.format(bag))
     p = init_rosparams()
     msgs = bag_loader(bag, map_joint_state, topic_name = 'joint_states')
     force_unaligned = bag_loader(bag, map_wrench, topic_name = 'wrench')
     force = get_aligned_msgs(msgs, force_unaligned)
-    
-    observer = ekf(p, msgs['pos'][:,0], est_geom, est_stiff)
-    num_msgs = len(msgs['pos'].T)
-    
-    states = np.zeros((observer.dyn_sys.nx, num_msgs))
-    contact_pts = np.zeros((3, num_msgs))
-    stiff = np.zeros((3, num_msgs))
-    f_ee_mo = np.zeros((3, num_msgs))
-    f_ee_obs = np.zeros((3, num_msgs))
-    true_pos = np.zeros((6, num_msgs))
-    true_vel = np.zeros((6, num_msgs))
-    x_ees = []
-    inputs = msgs['torque']
-    traj_len = len(states.T)
-    update_freq = []
 
-    #for i in range(2000):
-        #res = observer.step(q = msgs['pos'][:,0], tau = msgs['torque'][:,0])
+    robot = Robot(p, est_pars = est_pars)
+    observer = ekf(robot)
+    num_msgs = len(msgs['pos'].T)
+
+    sd_initial = robot.get_statedict(robot.xi_init)
+    results = {k:np.zeros((v.shape[0], num_msgs)) for k,v in sd_initial.items()}
+    results['true_pos'] = msgs['pos']
+    results['true_vel'] = msgs['vel']
+    results['f_ee'] = force['force']
+    results['input'] = msgs['torque']
+    print("Results dict has elements: {}".format(results.keys()))
+    
+    f_ee_mo = np.zeros((3, num_msgs))
+
+    update_freq = []
     
     for i in range(num_msgs):
         #if i == 1 or i == 1000 or i == 3000:
         #    print(observer.cov)
-        true_pos[:,i] = msgs['pos'][:,i]
-        true_vel[:,i] = msgs['vel'][:,i]
+
         tic = time.perf_counter()
-        res = observer.step(q = msgs['pos'][:,i], tau = msgs['torque'][:,i])
-        #print(observer.cov)
+        res = observer.step(q = msgs['pos'][:,i], tau = msgs['torque'][:,i], dyn_sys = robot)
         toc = time.perf_counter()
         update_freq.append(1/(toc-tic))
-        states[:,i] = res['xi'].flatten()
-        #contact_pts[:,i] = res['cont_pt'].flatten()
-        #stiff[:,i] = res.get('stiff',np.zeros(3)).flatten()
-        #f_ee_mo[:,i] = res['f_ee_mo'].flatten()
-        #f_ee_obs[:,i] = res['f_ee_obs'].flatten()
-        #x_ees += [res['x_ee']]
-    average_freq = (sum(update_freq)/traj_len)/1000
+        
+        statedict = robot.get_statedict(res['xi'])
+        for k,v in statedict.items():
+            results[k][:,[i]] = v
+
+    average_freq = (sum(update_freq)/num_msgs)/1000
     print("Average update frequency is {} kHz".format(average_freq))
     fname = bag[:-4]+'.pkl'
     with open(fname, 'wb') as f:
-        pickle.dump((states, inputs, contact_pts, x_ees, stiff,
-                     f_ee_mo, f_ee_obs, force['force'],
-                     true_pos, true_vel), f)
-    print('Finished saving state trajectory of length {}'.format(len(states.T)))
+        pickle.dump(results, f)
+    print('Finished saving state trajectory of length {}'.format(num_msgs))
 
 def param_fit(bag):
     fname = bag[:-4]+'.pkl'
@@ -168,20 +162,22 @@ def param_fit(bag):
         generate_traj(bag)
     print("Loading trjaectory for fitting params")
     with open(fname, 'rb') as f:
-        states, inputs = pickle.load(f)[:2]
+        results = pickle.load(f)
+    states = results['xi']
+    inputs = results['input']
 
     p_to_opt = {}
-    p_to_opt['pos'] = ca.SX.sym('pos',3)
-    p_to_opt['stiff'] = ca.SX.sym('stiff',3)
-    p_to_opt['rest'] = ca.SX.sym('rest',3)
+    p_to_opt['contact_1_pos'] = ca.SX.sym('pos',3)
+    p_to_opt['contact_1_stiff'] = ca.SX.sym('stiff',3)
+    p_to_opt['contact_1_rest'] = ca.SX.sym('rest',3)
 
     p = init_rosparams()
     prediction_skip = 1
     p['h'] *= prediction_skip
-    rob = robot(p, p_to_opt)
+    rob = Robot(p, opt_pars = p_to_opt)
     optimized_par = optimize(states.T, inputs.T, p_to_opt, rob.disc_dyn, prediction_skip)
     for k,v in optimized_par.items():
-        rospy.set_param('contact1_'+k, v.full().tolist())
+        rospy.set_param('contact_1_'+k, v.full().tolist())
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -197,12 +193,16 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
+    est_pars = {}
+    if args.est_stiff: est_pars['contact_1'] = ['stiff']
+    if args.est_geom: est_pars['contact_1'] = ['pos']
+
     if args.new_traj:
         if args.bag == "": rospy.signal_shutdown("Need bag to gen traj from")
-        generate_traj(args.bag, args.est_geom, args.est_stiff)
+        generate_traj(args.bag, est_pars)
     elif args.opt_param:
         if args.bag == "": rospy.signal_shutdown("Need bag to optimize params from")
         param_fit(args.bag)
         generate_traj(args.bag)
     else:
-        start_node(est_geom = args.est_geom, est_stiff = args.est_stiff)
+        start_node(est_pars)

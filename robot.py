@@ -10,15 +10,14 @@ class Robot():
     """ This class handles the loading of robot dynamics/kinematics, the discretization/integration, and linearization
         This class should be stateless (e.g. the actual system state shouldn't be stored here).
     """
-    def __init__(self, par, opt_par = {}, est_pars = {}):
+    def __init__(self, par, opt_pars = {}, est_pars = {}):
         """ IN: par is the complete parameter dictionary
             IN: opt_par is a dict, containing the sym vars directly
             IN: est_par is a dict, key is contact name, value is list of params
         """
-
-        print("Building robot with contact pars: {}".format(par['contact_1']))
-        print("optimization pars: {}".format(opt_par))
-        print("estimation pars:   {}".format(est_par))
+        print("Building robot model with")
+        print("  optimization pars: {}".format(opt_pars))
+        print("  estimation pars:   {}".format(est_pars))
     
         self.vars = {}       # dictionary of state as symbolic variables
         self.jit_options = {}#{'jit':True, 'compiler':'shell', "jit_options":{"compiler":"gcc", "flags": ["-Ofast"]}}
@@ -26,12 +25,21 @@ class Robot():
         self.contact = Contact()
         
         self.load_kin_dyn(par['urdf'], par['urdf_path'])
-        self.build_vars(par, opt_par, est_par)
+        self.build_vars(par, opt_pars, est_pars)
         self.build_fwd_kin()
+        self.fric_model = par['fric_model']
                         
         self.contact.build_contact(par, self.vars['q'], self.x_ee)
-        self.build_disc_dyn(par['h'], opt_par, est_par)
-            
+        self.build_disc_dyn(par['h'], opt_pars)
+
+    def get_statedict(self, xi):
+        # Maps from a vector xi to a state dictionary
+        d = {'q':xi[:self.nq],
+             'dq':xi[self.nq:2*self.nq],
+             'xi':xi}
+        d.update(self.contact.get_statedict(d['q'], d['dq'], xi[2*self.nq:]))
+        return d
+        
     def load_kin_dyn(self, urdf, urdf_path):
         self.model = pin.buildModelsFromUrdf(urdf_path, verbose = True)[0]
         self.data = self.model.createData()
@@ -48,14 +56,16 @@ class Robot():
 
         self.vars['est_pars'], xii_con, ci_con, pn_con = self.contact.build_vars(par, est_pars)
         
-        xi_init = [par['q0'], ca.DM.zeros(par['q0']), *xii_con]
+        xi_init = [par['q0'], ca.DM.zeros(self.nq), *xii_con]
         cov_init_vec = [par['cov_init']['pos'], par['cov_init']['vel'], *ci_con]
         proc_noise_vec = [par['proc_noise']['pos'], par['proc_noise']['vel'], *pn_con]
-        
+
+        self.vars['xi'] = ca.vertcat(self.vars['q'], self.vars['dq'], self.vars['est_pars'])
         self.xi_init = ca.vertcat(*xi_init)
         self.cov_init = ca.diag(ca.vertcat(*cov_init_vec))
         self.proc_noise = ca.diag(ca.vertcat(*proc_noise_vec))
-
+        self.meas_noise = ca.diag(par['meas_noise']['pos'])
+        
         self.nx = 2*self.nq+self.contact.np
         self.ny = self.nq
 
@@ -77,7 +87,7 @@ class Robot():
         
         self.d_fwd_kin = ca.Function('dx', [q, dq], [J@dq], ['q', 'dq'], ['dx'])
     
-    def build_disc_dyn(self, h, opt_par):
+    def build_disc_dyn(self, h, opt_pars):
         q = self.vars['q']
         dq = self.vars['dq']
         tau = self.vars['tau']
@@ -88,7 +98,7 @@ class Robot():
         Mtilde_inv = ca.inv(M+h*B)
         semiimplicit = (ca.DM.eye(self.nq)+h*ca.inv(M)@ca.diag(self.fric_model['visc']))
 
-        tau_i, disp, cont_pt = self.get_contact_forces(q, dq)
+        tau_i = self.contact.get_contact_torque(q)
         
         # Old-fashioned dynamics
         ddq =  ca.inv(M)@(tau_err+tau_i)
@@ -97,29 +107,29 @@ class Robot():
         xi_next = ca.vertcat(q_next, dq_next, self.vars.get('est_pars', []))
 
         fn_dict = {'xi':self.vars['xi'], 'xi_next': xi_next, 'tau':tau}
-        fn_dict.update(opt_par)
+        fn_dict.update(opt_pars)
         
         self.disc_dyn =  ca.Function('disc_dyn', fn_dict,
-                                     ['xi', 'tau', *opt_par.keys()],
+                                     ['xi', 'tau', *opt_pars.keys()],
                                      ['xi_next'], self.jit_options).expand()
         
         fn_dict['A'] = ca.jacobian(fn_dict['xi_next'], self.vars['xi'])
-        self.A = ca.Function('A', {k:fn_dict[k] for k in ('A', 'xi', 'tau')},  
-                                ['xi', 'tau'],['A'], self.jit_options).expand()        
+        self.A = ca.Function('A', {k:fn_dict[k] for k in ('A', 'xi', 'tau', *opt_pars.keys())},  
+                                ['xi', 'tau', *opt_pars.keys()],['A'], self.jit_options).expand()        
         self.C =  np.hstack((np.eye(self.nq), np.zeros((self.nq, self.nx-self.nq))))
 
         # New dynamics
         delta = Mtilde_inv@(-B@dq + tau_err + tau_i)
         fn_dict = {'xi':self.vars['xi'],
                    'tau':tau}
-        fn_dict.update(opt_par)
+        fn_dict.update(opt_pars)
 
         dq_next= dq + h*delta
         q_next = q + h*dq_next
         fn_dict['xi_next'] = ca.vertcat(q_next, dq_next, self.vars.get('est_pars', []))
         self.vars['xi_next'] = fn_dict['xi_next']       
         self.disc_dyn_opt =  ca.Function('disc_dyn', fn_dict,
-                                     ['xi', 'tau', *opt_par.keys()],
+                                     ['xi', 'tau', *opt_pars.keys()],
                                      ['xi_next'], self.jit_options).expand()    
         
         nq = self.nq
@@ -136,8 +146,9 @@ class Robot():
         A[nq:nq2, :nq] += h*ddelta_dq
         A[nq:nq2, nq:nq2] += h*ddelta_ddq
 
-        self.A_opt =  ca.Function('A', {'xi': self.vars['xi'], 'tau': tau, 'A': A},
-                                 ['xi', 'tau'],['A'], self.jit_options).expand()
+        fn_dict['A_opt'] = A
+        self.A_opt =  ca.Function('A', {k:fn_dict[k] for k in ('A_opt', 'xi', 'tau', *opt_pars.keys())},
+                                 ['xi', 'tau',  *opt_pars.keys()],['A_opt'], self.jit_options).expand()
 
         self.C =  np.hstack((np.eye(self.nq), np.zeros((self.nq, self.nx-self.nq))))
         

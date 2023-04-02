@@ -12,7 +12,7 @@ def loss_fn(states, inputs, param, disc_dyn, prediction_skip = 1, num_pts = 2000
         print("Traj only has {} points, less than requested pts. Still doing it".format(len(states)))
         num_pts = len(states)
     skip_size = int(len(states)/num_pts)
-
+    
     cont_pts = []
     cont_pts_mean = ca.DM((0,0,0))
     for i in range(0, len(states)-prediction_skip, skip_size):
@@ -20,12 +20,13 @@ def loss_fn(states, inputs, param, disc_dyn, prediction_skip = 1, num_pts = 2000
         param['tau'] = inputs[i]
         res = disc_dyn.call(param)
         loss += ca.norm_2(states[i+prediction_skip]-res['xi_next'])
-        loss += 0.1*ca.norm_2(res['disp'])
-        cont_pts_mean += res['cont_pt']/num_pts
-        cont_pts += [res['cont_pt']]
+        
+        #loss += 0.1*ca.norm_2(res['disp'])
+        #cont_pts_mean += res['cont_pt']/num_pts
+        #cont_pts += [res['cont_pt']]
 
-    for c in cont_pts:
-        c -= cont_pts_mean
+    #for c in cont_pts:
+    #    c -= cont_pts_mean
         
     #loss += 1e-2*ca.sumsqr(ca.vertcat(*cont_pts))
 
