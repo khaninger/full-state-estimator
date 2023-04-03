@@ -146,9 +146,9 @@ class Robot():
         A[nq:nq2, :nq] += h*ddelta_dq
         A[nq:nq2, nq:nq2] += h*ddelta_ddq
 
-        fn_dict['A_opt'] = A
-        self.A_opt =  ca.Function('A', {k:fn_dict[k] for k in ('A_opt', 'xi', 'tau', *opt_pars.keys())},
-                                 ['xi', 'tau',  *opt_pars.keys()],['A_opt'], self.jit_options).expand()
+        fn_dict['A'] = A
+        self.A_opt =  ca.Function('A', {k:fn_dict[k] for k in ('A', 'xi', 'tau', *opt_pars.keys())},
+                                 ['xi', 'tau',  *opt_pars.keys()],['A'], self.jit_options).expand()
 
         self.C =  np.hstack((np.eye(self.nq), np.zeros((self.nq, self.nx-self.nq))))
         

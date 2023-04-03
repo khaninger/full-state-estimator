@@ -30,9 +30,11 @@ class ekf():
         fn_dict = {'tau':tau, 'mu':mu, 'cov':cov, 'q_meas':q_meas,
                    'mu_next':mu_next_corr, 'cov_next':cov_next_corr}
         self.step_fn = ca.Function('ekf_step', fn_dict,
-                                   ['tau', 'mu', 'cov', 'q_meas'],
-                                   ['mu_next', 'cov_next'])
+                                   ['tau', 'mu', 'cov', 'q_meas'], # inputs to casadi function
+                                   ['mu_next', 'cov_next'])        # outputs of casadi function
+        return self.step_fn
 
+    
     def step_fast(self, q, tau, F=None):
         step_args = {'tau':tau,
                      'mu':self.x['mu'],
@@ -52,7 +54,7 @@ class ekf():
         x_next = dyn_sys.disc_dyn.call(step_args)  # predict state and output at next time step
         A, C = dyn_sys.get_linearized(step_args)   # get the linearized dynamics and observation matrices
         cov_next = A@self.x['cov']@(A.T) + self.proc_noise
-        #print(cov_next)
+        print(cov_next)
 
         self.L = cov_next@C.T@ca.inv(C@cov_next@(C.T) + self.meas_noise) # calculate Kalman gain
         if np.any(np.isnan(self.L)): raise ValueError("Nans in the L matrix")

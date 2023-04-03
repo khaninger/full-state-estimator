@@ -12,6 +12,7 @@ from robot import Robot
 from helper_fns import *
 from param_fit import *
 import time
+
 def init_rosparams():
     p = {}
     p['urdf_path'] = rospy.get_param('urdf_description', 'urdf/src/universal_robot/ur_description/urdf/ur16e.urdf')
@@ -33,7 +34,7 @@ def init_rosparams():
     p['meas_noise'] = {'pos':np.array(rospy.get_param('meas_noise', [1e-1]*6))}
     p['contact_models'] = ['contact_1'] # No underscores! That's used to split
     p['contact_1_pos']   = ca.DM(rospy.get_param('contact_1_pos', [1]*3))
-    p['contact_1_stiff'] = ca.DM(rospy.get_param('contact_1_stiff', [1]*3))
+    p['contact_1_stiff'] = ca.DM(rospy.get_param('contact_1_stiff', [0]*3))
     p['contact_1_rest']  = ca.DM(rospy.get_param('contact_1_rest', [-0.4, 0.3, 0.12]))
     p['mom_obs_K'] = [20]*6
     p['q0'] = np.array([2.29, -1.02, -0.9, -2.87, 1.55, 0.56])
