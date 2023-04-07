@@ -14,7 +14,7 @@ def build_step_fn(robot):
 
     q_meas = ca.SX.sym('q_meas', robot.nq)
     cov = ca.SX.sym('cov', mu.shape[0], mu.shape[0])
-
+    
     cov_next = A@cov@(A.T) + proc_noise
     L = cov_next@C.T@ca.inv(C@cov_next@(C.T) + meas_noise) # calculate Kalman gain
 

@@ -7,7 +7,7 @@ class Contact():
         self.torques = {} # contact force models
         self.disps = {}  # signed distance functions
         self.pts = {}    # list of contact models
-        self.est_pars = []
+        self.est_pars = {}
         self.pars = {}
         self.np = 0
 
@@ -18,15 +18,15 @@ class Contact():
         
         for contact, est_pars in est_par_dict.items():
             for est_par in est_pars:
-                name = contact+"_"+est_par 
-                par[name] = ca.SX.sym(name, 3)
-                self.est_pars.append(par[name])
+                name = contact+"_"+est_par
                 xi_init.append(par[name])
+                par[name] = ca.SX.sym(name, 3)
+                self.est_pars[name] = par[name]
                 cov_init_vec.append(par['cov_init'][est_par])
                 proc_noise_vec.append(par['proc_noise'][est_par])
-                print('Adding {} model with {}:{}'.format(contact, est_par, par[name]))
+                print('Adding {} model with estimated {}'.format(contact, est_par))
 
-        est_pars_vec = ca.vertcat(self.est_pars)
+        est_pars_vec = ca.vertcat(*self.est_pars.values())
         self.np = est_pars_vec.shape[0]
         return est_pars_vec, xi_init, cov_init_vec, proc_noise_vec
 
@@ -77,8 +77,8 @@ class Contact():
         d.update(self.pars)
 
         st = 0
-        for par in self.est_pars:
-            d[par] = xi[st:st+3]
+        for par in self.est_pars.keys():
+            d[par] = est_pars[st:st+3]
             st += 3
             
         return d
