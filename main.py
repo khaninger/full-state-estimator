@@ -114,7 +114,7 @@ def start_node(est_pars):
     rospy.on_shutdown(node.shutdown)  # Set shutdown to be executed when ROS exits
     rospy.spin()
 
-def generate_traj(bag, est_pars):
+def generate_traj(bag, est_pars = {}):
     print('Generating trajectory from {}'.format(bag))
     p = init_rosparams()
     msgs = bag_loader(bag, map_joint_state, topic_name = 'joint_states')
@@ -142,11 +142,11 @@ def generate_traj(bag, est_pars):
         #    print(observer.cov)
 
         tic = time.perf_counter()
-        res = observer.step(q = msgs['pos'][:,i], tau = msgs['torque'][:,i], dyn_sys = robot)
+        res = observer.step(q = msgs['pos'][:,i], tau = msgs['torque'][:,i])
         toc = time.perf_counter()
         update_freq.append(1/(toc-tic))
         
-        statedict = robot.get_statedict(res['xi'])
+        statedict = robot.get_statedict(res['mu'])
         for k,v in statedict.items():
             results[k][:,[i]] = v
 
@@ -175,9 +175,8 @@ def param_fit(bag):
     p = init_rosparams()
     prediction_skip = 1
     p['h'] *= prediction_skip
-    p.update(p_to_opt)
-    rob = Robot(p)
-    optimized_par = optimize(states.T, inputs.T, p_to_opt, rob.disc_dyn, prediction_skip)
+    rob = Robot(p, opt_pars = p_to_opt)
+    optimized_par = optimize(states.T, inputs.T, p_to_opt, rob, prediction_skip)
     for k,v in optimized_par.items():
         rospy.set_param('contact_1_'+k, v.full().tolist())
 

@@ -10,7 +10,7 @@ def build_step_fn(robot):
     tau = robot.vars['tau']
     mu = robot.vars['xi']
     mu_next = robot.vars['xi_next']
-    A, C = robot.get_linearized_opt({'tau':tau, 'xi':mu})
+    A, C = robot.get_linearized({'tau':tau, 'xi':mu})
 
     q_meas = ca.SX.sym('q_meas', robot.nq)
     cov = ca.SX.sym('cov', mu.shape[0], mu.shape[0])
@@ -36,7 +36,7 @@ class ekf():
         self.step_fn = build_step_fn(robot)
         self.dyn_sys = robot
 
-    def step_fast(self, q, tau, F=None):
+    def step(self, q, tau, F=None):
         step_args = {'tau':tau,
                      'mu':self.x['mu'],
                      'cov':self.x['cov'],
@@ -44,38 +44,6 @@ class ekf():
         res = self.step_fn.call(step_args)
         self.x['mu'] = res['mu_next']
         self.x['cov'] = res['cov_next']
-        return self.x
-
-    def step(self, q, tau, F = None):
-        """ Steps the observer baed on the input at time t and observation at time t
-            Standard EKF update, see, e.g. pg. 51 in Thrun "Probabilistic Robotics" """
-        step_args = {'tau':tau,
-                     'xi':self.x['mu']}
-        
-        x_next = self.dyn_sys.disc_dyn.call(step_args)  # predict state and output at next time step
-        A, C = self.dyn_sys.get_linearized(step_args)   # get the linearized dynamics and observation matrices
-        cov_next = A@self.x['cov']@(A.T) + self.dyn_sys.proc_noise
-
-        self.L = cov_next@C.T@ca.inv(C@cov_next@(C.T) + self.dyn_sys.meas_noise) # calculate Kalman gain
-        if np.any(np.isnan(self.L)): raise ValueError("Nans in the L matrix")
-    
-        xi_corr = x_next['xi_next'] + self.L@(q - x_next['xi_next'][:self.dyn_sys.nq])
-        self.x['mu'] = xi_corr.full()
-        #self.x['q'] = xi_corr[:dyn_sys.nq].full()
-        #self.x['dq'] = xi_corr[dyn_sys.nq:2*dyn_sys.nq].full()
-        #if self.est_geom: self.x['p'] = xi_corr[2*dyn_sys.nq:].full()
-        #if self.est_stiff: self.x['stiff'] = xi_corr[2*dyn_sys.nq:].full().flatten()
-        self.x['cov'] = (ca.DM.eye(self.dyn_sys.nx)-self.L@C)@cov_next # corrected covariance
-        
-        #self.x['cont_pt'] = x_next['cont_pt'].full().flatten()
-        #x_ee = self.dyn_sys.fwd_kin(self.x['q'])
-        #self.x['x_ee'] = (x_ee[0].full(),
-        #                  x_ee[1].full())
-        #self.mom_obs.step(x_next['mom'], x_next['tau_err'])
-        #self.x['f_ee_mo'] =  (self.dyn_sys.jacpinv(self.x['q'])@self.mom_obs.r).full()
-        #self.x['f_ee_obs'] = -(self.dyn_sys.jacpinv(self.x['q'])@x_next['tau_i']).full()
-        
-        
         return self.x
 
     def likelihood(self, obs):

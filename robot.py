@@ -96,29 +96,9 @@ class Robot():
 
         M = cpin.crba(self.cmodel, self.cdata, q)+ca.diag(np.array([0.5, 0.5, 0.5, 0.25, 0.25, 0.25]))
         Mtilde_inv = ca.inv(M+h*B)
-        semiimplicit = (ca.DM.eye(self.nq)+h*ca.inv(M)@ca.diag(self.fric_model['visc']))
 
         tau_i = self.contact.get_contact_torque(q)
-        
-        # Old-fashioned dynamics
-        ddq =  ca.inv(M)@(tau_err+tau_i)
-        dq_next= ca.inv(semiimplicit)@(dq + h*ddq)
-        q_next = q + h*dq_next
-        xi_next = ca.vertcat(q_next, dq_next, self.vars.get('est_pars', []))
 
-        fn_dict = {'xi':self.vars['xi'], 'xi_next': xi_next, 'tau':tau}
-        fn_dict.update(opt_pars)
-        
-        self.disc_dyn =  ca.Function('disc_dyn', fn_dict,
-                                     ['xi', 'tau', *opt_pars.keys()],
-                                     ['xi_next'], self.jit_options).expand()
-        
-        fn_dict['A'] = ca.jacobian(fn_dict['xi_next'], self.vars['xi'])
-        self.A = ca.Function('A', {k:fn_dict[k] for k in ('A', 'xi', 'tau', *opt_pars.keys())},  
-                                ['xi', 'tau', *opt_pars.keys()],['A'], self.jit_options).expand()        
-        self.C =  np.hstack((np.eye(self.nq), np.zeros((self.nq, self.nx-self.nq))))
-
-        # New dynamics
         delta = Mtilde_inv@(-B@dq + tau_err + tau_i)
         fn_dict = {'xi':self.vars['xi'],
                    'tau':tau}
@@ -128,7 +108,7 @@ class Robot():
         q_next = q + h*dq_next
         fn_dict['xi_next'] = ca.vertcat(q_next, dq_next, self.vars.get('est_pars', []))
         self.vars['xi_next'] = fn_dict['xi_next']       
-        self.disc_dyn_opt =  ca.Function('disc_dyn', fn_dict,
+        self.disc_dyn =  ca.Function('disc_dyn', fn_dict,
                                      ['xi', 'tau', *opt_pars.keys()],
                                      ['xi_next'], self.jit_options).expand()    
         
@@ -147,7 +127,7 @@ class Robot():
         A[nq:nq2, nq:nq2] += h*ddelta_ddq
 
         fn_dict['A'] = A
-        self.A_opt =  ca.Function('A', {k:fn_dict[k] for k in ('A', 'xi', 'tau', *opt_pars.keys())},
+        self.A =  ca.Function('A', {k:fn_dict[k] for k in ('A', 'xi', 'tau', *opt_pars.keys())},
                                  ['xi', 'tau',  *opt_pars.keys()],['A'], self.jit_options).expand()
 
         self.C =  np.hstack((np.eye(self.nq), np.zeros((self.nq, self.nx-self.nq))))
@@ -159,7 +139,3 @@ class Robot():
 
     def get_linearized(self, state):
         return self.A.call(state)['A'], self.C
-
-    def get_linearized_opt(self, state):
-        return self.A_opt.call(state)['A'], self.C
-
