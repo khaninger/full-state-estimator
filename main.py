@@ -32,8 +32,8 @@ def init_rosparams():
                      'geom':[1.5e6]*3,
                      'stiff':[6e15]*3}
     p['meas_noise'] = {'pos':np.array(rospy.get_param('meas_noise', [1e-1]*6))}
-    p['contact_models'] = ['contact_1'] # No underscores! That's used to split
-    p['contact_1_pos']   = ca.DM(rospy.get_param('contact_1_pos', [1]*3))
+    p['contact_models'] = ['contact_1']
+    p['contact_1_pos']   = ca.DM(rospy.get_param('contact_1_pos', [0.1]*3))
     p['contact_1_stiff'] = ca.DM(rospy.get_param('contact_1_stiff', [0]*3))
     p['contact_1_rest']  = ca.DM(rospy.get_param('contact_1_rest', [-0.4, 0.3, 0.12]))
     p['mom_obs_K'] = [20]*6
@@ -175,7 +175,8 @@ def param_fit(bag):
     p = init_rosparams()
     prediction_skip = 1
     p['h'] *= prediction_skip
-    rob = Robot(p, opt_pars = p_to_opt)
+    p.update(p_to_opt)
+    rob = Robot(p)
     optimized_par = optimize(states.T, inputs.T, p_to_opt, rob.disc_dyn, prediction_skip)
     for k,v in optimized_par.items():
         rospy.set_param('contact_1_'+k, v.full().tolist())

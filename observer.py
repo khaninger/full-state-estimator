@@ -2,7 +2,7 @@ import casadi as ca
 import numpy as np
 from robot import Robot
 
-def build_step_fn(self, robot):
+def build_step_fn(robot):
     # Build a static KF update w arguments of mu, sigma, tau and measured q
     proc_noise = robot.proc_noise
     meas_noise = robot.meas_noise
@@ -23,9 +23,10 @@ def build_step_fn(self, robot):
 
     fn_dict = {'tau':tau, 'mu':mu, 'cov':cov, 'q_meas':q_meas,
                'mu_next':mu_next_corr, 'cov_next':cov_next_corr}
-    self.step_fn = ca.Function('ekf_step', fn_dict,
-                               ['tau', 'mu', 'cov', 'q_meas'], # inputs to casadi function
-                               ['mu_next', 'cov_next'])        # outputs of casadi function
+    
+    step_fn = ca.Function('ekf_step', fn_dict,
+                          ['tau', 'mu', 'cov', 'q_meas'], # inputs to casadi function
+                          ['mu_next', 'cov_next'])        # outputs of casadi function
     return step_fn
 
 class ekf():
@@ -33,40 +34,38 @@ class ekf():
     def __init__(self, robot):
         self.x = {'mu':robot.xi_init, 'cov':robot.cov_init} 
         self.step_fn = build_step_fn(robot)
+        self.dyn_sys = robot
 
-    
     def step_fast(self, q, tau, F=None):
         step_args = {'tau':tau,
                      'mu':self.x['mu'],
                      'cov':self.x['cov'],
                      'q_meas':q}
         res = self.step_fn.call(step_args)
-        self.x['mu'] = res['mu_next'].full()
+        self.x['mu'] = res['mu_next']
         self.x['cov'] = res['cov_next']
         return self.x
 
-    def step(self, q, tau, dyn_sys, F = None):
+    def step(self, q, tau, F = None):
         """ Steps the observer baed on the input at time t and observation at time t
             Standard EKF update, see, e.g. pg. 51 in Thrun "Probabilistic Robotics" """
         step_args = {'tau':tau,
                      'xi':self.x['mu']}
         
-        x_next = dyn_sys.disc_dyn.call(step_args)  # predict state and output at next time step
-        A, C = dyn_sys.get_linearized(step_args)   # get the linearized dynamics and observation matrices
-        cov_next = A@self.x['cov']@(A.T) + self.proc_noise
-        print(cov_next)
+        x_next = self.dyn_sys.disc_dyn.call(step_args)  # predict state and output at next time step
+        A, C = self.dyn_sys.get_linearized(step_args)   # get the linearized dynamics and observation matrices
+        cov_next = A@self.x['cov']@(A.T) + self.dyn_sys.proc_noise
 
-        self.L = cov_next@C.T@ca.inv(C@cov_next@(C.T) + self.meas_noise) # calculate Kalman gain
+        self.L = cov_next@C.T@ca.inv(C@cov_next@(C.T) + self.dyn_sys.meas_noise) # calculate Kalman gain
         if np.any(np.isnan(self.L)): raise ValueError("Nans in the L matrix")
     
-        xi_corr = x_next['xi_next'] + self.L@(q - x_next['xi_next'][:dyn_sys.nq])
-        self.x['xi'] = xi_corr.full()
+        xi_corr = x_next['xi_next'] + self.L@(q - x_next['xi_next'][:self.dyn_sys.nq])
+        self.x['mu'] = xi_corr.full()
         #self.x['q'] = xi_corr[:dyn_sys.nq].full()
         #self.x['dq'] = xi_corr[dyn_sys.nq:2*dyn_sys.nq].full()
         #if self.est_geom: self.x['p'] = xi_corr[2*dyn_sys.nq:].full()
         #if self.est_stiff: self.x['stiff'] = xi_corr[2*dyn_sys.nq:].full().flatten()
-        self.x['cov'] = (ca.DM.eye(dyn_sys.nx)-self.L@C)@cov_next # corrected covariance
-    
+        self.x['cov'] = (ca.DM.eye(self.dyn_sys.nx)-self.L@C)@cov_next # corrected covariance
         
         #self.x['cont_pt'] = x_next['cont_pt'].full().flatten()
         #x_ee = self.dyn_sys.fwd_kin(self.x['q'])
