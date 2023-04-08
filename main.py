@@ -34,7 +34,7 @@ def init_rosparams():
     p['meas_noise'] = {'pos':np.array(rospy.get_param('meas_noise', [1e-1]*6))}
     p['contact_models'] = ['contact_1']
     p['contact_1_pos']   = ca.DM(rospy.get_param('contact_1_pos', [0.1]*3))
-    p['contact_1_stiff'] = ca.DM(rospy.get_param('contact_1_stiff', [0]*3))
+    p['contact_1_stiff'] = ca.DM(rospy.get_param('contact_1_stiff', [100]*3))
     p['contact_1_rest']  = ca.DM(rospy.get_param('contact_1_rest', [-0.4, 0.3, 0.12]))
     p['mom_obs_K'] = [20]*6
     p['q0'] = np.array([2.29, -1.02, -0.9, -2.87, 1.55, 0.56])
@@ -145,6 +145,7 @@ def generate_traj(bag, est_pars = {}):
         res = observer.step(q = msgs['pos'][:,i], tau = msgs['torque'][:,i])
         toc = time.perf_counter()
         update_freq.append(1/(toc-tic))
+        print(res['mu'])
         statedict = robot.get_statedict(res['mu'])
         for k,v in statedict.items():
             results[k][:,[i]] = v

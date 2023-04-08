@@ -56,11 +56,12 @@ class Robot():
 
         self.build_fwd_kin()
 
+        self.vars['est_pars'], xii_con, ci_con, pn_con = self.contact.build_vars(par, est_pars)
         par.update(opt_pars)
         if par['contact_models'] != []:
             self.contact.build_contact(par, self.vars['q'], self.x_ee)
             
-        self.vars['est_pars'], xii_con, ci_con, pn_con = self.contact.build_vars(par, est_pars)
+        
         xi_init = [par['q0'], ca.DM.zeros(self.nq), *xii_con]
         cov_init_vec = [par['cov_init']['q'], par['cov_init']['dq'], *ci_con]
         proc_noise_vec = [par['proc_noise']['q'], par['proc_noise']['dq'], *pn_con]
@@ -70,7 +71,6 @@ class Robot():
         self.cov_init = ca.diag(ca.vertcat(*cov_init_vec))
         self.proc_noise = ca.diag(ca.vertcat(*proc_noise_vec))
         self.meas_noise = ca.diag(par['meas_noise']['pos'])
-
 
         self.nx = 2*self.nq+self.contact.np
         self.ny = self.nq
@@ -118,7 +118,6 @@ class Robot():
                                      ['xi', 'tau', *opt_pars.keys()],
                                      ['xi_next'], self.jit_options).expand()    
         
-
         ddelta_dq = Mtilde_inv@ca.jacobian(tau_i, q) #ignoring derivative of Mtilde_inv wrt q, ~5x speedup
         ddelta_ddq = -Mtilde_inv@B
         ddelta_dp = Mtilde_inv@ca.jacobian(tau_i, self.vars['xi'][nq2:]) #ignoring derivative of Mtilde_inv wrt q, ~5x speedup
@@ -129,7 +128,9 @@ class Robot():
         A[:nq, nq2:] += h*h*ddelta_dp
         A[nq:nq2, :nq] += h*ddelta_dq
         A[nq:nq2, nq:nq2] += h*ddelta_ddq
-
+        A[nq:nq2, nq2:] += h*ddelta_dp
+        
+        #A = ca.jacobian(self.vars['xi_next'], self.vars['xi'])
         fn_dict['A'] = A
         self.A =  ca.Function('A', {k:fn_dict[k] for k in ('A', 'xi', 'tau', *opt_pars.keys())},
                                  ['xi', 'tau',  *opt_pars.keys()],['A'], self.jit_options).expand()
