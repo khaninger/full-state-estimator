@@ -26,11 +26,11 @@ def init_rosparams():
     p['proc_noise'] = {'q':  np.array(rospy.get_param('pos_noise', [1e-2]*6)),
                        'dq':  np.array(rospy.get_param('vel_noise', [1e5]*6)),
                        'pos': np.array(rospy.get_param('geom_noise', [1e1]*3)),
-                       'stiff':np.array(rospy.get_param('stiff_noise', [5e10]*3))}
+                       'stiff':np.array(rospy.get_param('stiff_noise', [8e6]*3))}
     p['cov_init'] = {'q': [1e-2]*6,
                      'dq': [1e5]*6,
                      'pos':[1.5e6]*3,
-                     'stiff':[6e15]*3}
+                     'stiff':[6e6]*3}
     p['meas_noise'] = {'pos':np.array(rospy.get_param('meas_noise', [1e-1]*6))}
     p['contact_models'] = ['contact_1']
     p['contact_1_pos']   = ca.DM(rospy.get_param('contact_1_pos', [0.1]*3))
@@ -145,7 +145,7 @@ def generate_traj(bag, est_pars = {}):
         res = observer.step(q = msgs['pos'][:,i], tau = msgs['torque'][:,i])
         toc = time.perf_counter()
         update_freq.append(1/(toc-tic))
-        print(res['mu'])
+        print(res['mu'][12:])
         statedict = robot.get_statedict(res['mu'])
         for k,v in statedict.items():
             results[k][:,[i]] = v
