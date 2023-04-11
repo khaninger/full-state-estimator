@@ -46,7 +46,6 @@ def init_rosparams():
     p['sampled_mode'] = np.random.choice(['free-space', 'contact'], p=p['belief_init'])
     p['weight0'] = 1/p['num_particles']
 
-    
     return p
 
 class ros_observer():
