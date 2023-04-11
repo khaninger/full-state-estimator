@@ -35,7 +35,7 @@ class ekf():
         self.mom_obs = MomentumObserver(par, q0)
         
     def step(self, q, tau, dyn_sys, F = None):
-        """ Steps the observer baed on the input at time t and observation at time t
+        """ Steps the observer based on the input at time t and observation at time t
             Standard EKF update, see, e.g. pg. 51 in Thrun "Probabilistic Robotics" """
         step_args = {'tau':tau,
                      'xi':ca.vertcat(self.x['q'], self.x['dq'],
@@ -79,7 +79,7 @@ class ekf():
         
         self.cov = (ca.DM.eye(dyn_sys.nx)-self.L@C)@self.cov_next # corrected covariance
         #print(self.cov[-3:,-3:])
-        return self.x, self.cov, self.S, self.y_hat,
+        return self.x, self.cov, self.S, self.y_hat
 
     def likelihood(self, obs):
         return NotImplemented

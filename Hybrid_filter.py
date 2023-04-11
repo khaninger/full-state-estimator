@@ -2,64 +2,50 @@ import pdb
 import sys
 import numpy as np
 import copy
-
 from scipy.stats import multivariate_normal
-from observer import ekf
 from robot import robot
 import copy
+from observer import build_step_fn
+class HybridParticleFilter:
+    def __init__(self,  par, robot):
+        """
+        par: dictionary of particle filter parameters
+        robot: dictionary of robot instances according to different  dynamic models
 
-class HybridParticleFilter(ekf):
-    def __init__(self,  par, q0, est_geom = False, est_stiff = False):
-        ekf.__init__(self, par, q0, est_geom, est_stiff)
+        """
+
         self.particles = []
         self.num_particles = par['num_particles']
         self.trans_matrix = par['transition_matrix']
         self.belief_free = par['belief_init'][0]
         self.belief_contact = par['belief_init'][1]
         self.belief_init = par['belief_init']
-
-        self.dyn_free = robot(par)
-        self.dyn_contact = robot(par, est_par=self.est_par)
+        self.x = {'mu': robot.xi_init, 'cov': robot.cov_init}
+        self.proc_noise = robot[0].proc_noise
+        self.meas_noise = robot[0].meas_noise
         self.y_hat = np.zeros((self.num_particles, 6, 1))
         self.S_t = np.zeros((self.num_particles, 6, 6))
+        self.step_fn = {}
+        self.modes_lst = list(robot.keys())  # getting the list of keys of robot dict, for mode sampling
+        for k, v in robot.items():
+            self.step_fn[k] = build_step_fn(v)
+
         for i in range(self.num_particles):
-            self.particles.append(Particle(self.belief_init, self.x, self.cov, 1/self.num_particles, sampled_mode0='free-space'))
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+            self.particles.append(Particle(self.belief_init, self.x['mu'], self.x['cov'], 1/self.num_particles, sampled_mode0='free-space'))
 
     def propagate(self, q, tau, F=None):
-        for i,particle in enumerate(self.particles):
+        for i, particle in enumerate(self.particles):
             particle.mode = np.matmul(particle.mode_prev, self.trans_matrix)
-            particle.sampled_mode = np.random.choice(['free-space', 'contact'], p=particle.mode)
-            if particle.sampled_mode == 'free-space':
-                particle.mu = ekf.step(self, q=q, tau=tau, dyn_sys=self.dyn_free)[0]
-                particle.Sigma = ekf.step(self, q=q, tau=tau, dyn_sys=self.dyn_free)[1]
-                self.S_t[i] = ekf.step(self, q=q, tau=tau, dyn_sys=self.dyn_free)[2]
-                self.y_hat[i] = ekf.step(self, q=q, tau=tau, dyn_sys=self.dyn_free)[3]
-            elif particle.sampled_mode == 'contact':
-                particle.mu = ekf.step(self, q=q, tau=tau, dyn_sys=self.dyn_contact)[0]
-                particle.Sigma = ekf.step(self, q=q, tau=tau, dyn_sys=self.dyn_contact)[1]
-                self.S_t[i] = ekf.step(self, q=q, tau=tau, dyn_sys=self.dyn_contact)[2]
-                self.y_hat[i] = ekf.step(self, q=q, tau=tau, dyn_sys=self.dyn_contact)[3]
+            particle.sampled_mode = np.random.choice(self.modes_lst, p=particle.mode)
+            particle.mu, particle.Sigma, self.S_t[i], self.y_hat[i] = self.step_fn[particle.sampled_mode](tau, particle.mu_prev, particle.Sigma_prev, q)
+            particle.mu_prev = particle.mu
+            particle.Sigma_prev = particle.Sigma
 
     def calc_weights(self, q):
         summation = 0
-        for i,particle in enumerate(self.particles):
+        for i, particle in enumerate(self.particles):
             particle.weight = multivariate_normal(mean=self.y_hat[i], cov=self.S_t[i]).pdf(q)
-            if particle.weight<1e-15:
+            if particle.weight < 1e-15:
                 particle.weight = sys.float_info.epsilon
             summation += particle.weight
         self.weightsum = 0
@@ -77,7 +63,7 @@ class HybridParticleFilter(ekf):
         pos = np.zeros(self.num_particles)
         weights = np.zeros(self.num_particles)
         vel = np.zeros(self.num_particles)
-        x_env = np.zeros(self.num_particles)
+        #x_env = np.zeros(self.num_particles)
         for i, particle in enumerate(self.particles):
             pos[i] = particle.mu['q']
             weights[i] = particle.weight
@@ -110,8 +96,8 @@ class HybridParticleFilter(ekf):
 class Particle:
     def __init__(self, mode_0, mu_0, P0, weight0, sampled_mode0):
         self.mode = self.mode_prev = mode_0
-        self.mu = mu_0
-        self.Sigma = P0
+        self.mu = self.mu_prev =  mu_0
+        self.Sigma = self.Sigma_prev = P0
         self.weight = weight0
         self.sampled_mode = sampled_mode0
 
