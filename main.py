@@ -39,8 +39,10 @@ def init_rosparams():
                       'rest':  ca.DM(rospy.get_param('contact_1_rest', [-0.4, 0.3, 0.12]))}
     p['mom_obs_K'] = [20]*6
     p['num_particles'] = 20
-    p['belief_init'] = np.array([0.7, 0.3])
+    p['belief_init'] = np.array([0.8, 0.2])
     p['transition_matrix'] = np.array([[0.8, 0.2], [0.2, 0.8]])
+    p['sampled_mode'] = np.random.choice(['free-space', 'contact'], p=p['belief_init'])
+    p['weight0'] = 1/p['num_particles']
 
     
     return p
@@ -69,10 +71,14 @@ class ros_observer():
         self.f_ee_mo_pub  = rospy.Publisher('force_ee_mo',  JointState, queue_size=1)
 
         self.params = init_rosparams()
-        
+        #self.dyn_sys = robot(par, est_par=est_par)
         self.observer = HybridParticleFilter(self.params,
                             np.array([2.29, -1.02, -0.9, -2.87, 1.55, 0.56]),
                             est_geom, est_stiff)
+        #self.observer = ekf(self.params,
+                            #np.array([2.29, -1.02, -0.9, -2.87, 1.55, 0.56]),
+                            #est_geom, est_stiff)
+
         
     def joint_callback(self, msg):
         """ To be called when the joint_state topic is published with joint position and torques """
@@ -127,6 +133,7 @@ def generate_traj(bag, est_geom = False, est_stiff = False):
     force = get_aligned_msgs(msgs, force_unaligned)
     
     observer = HybridParticleFilter(p, msgs['pos'][:,0], est_geom, est_stiff)
+    #observer = ekf(p, msgs['pos'][:,0], est_geom, est_stiff)
     num_msgs = len(msgs['pos'].T)
     
     states = np.zeros((12, num_msgs))
@@ -150,15 +157,20 @@ def generate_traj(bag, est_geom = False, est_stiff = False):
         true_pos[:,i] = msgs['pos'][:,i]
         true_vel[:,i] = msgs['vel'][:,i]
         tic = time.perf_counter()
-        res = observer.RunFilter(q = msgs['pos'][:,i], tau = msgs['torque'][:,i])[0]
+        res_q = observer.RunFilter(q = msgs['pos'][:,i], tau = msgs['torque'][:,i])[0]
+        res_dq = observer.RunFilter(q = msgs['pos'][:,i], tau = msgs['torque'][:,i])[1]
+        #res = observer.step(q = msgs['pos'][:,i], tau = msgs['torque'][:,i], dyn_sys=self.dyn_sys)[0]
+        #print(res_dq)
         toc = time.perf_counter()
         update_freq.append(1/(toc-tic))
-        states[:,i] = res['xi'].flatten()
-        contact_pts[:,i] = res['cont_pt'].flatten()
-        stiff[:,i] = res.get('stiff',np.zeros(3)).flatten()
-        f_ee_mo[:,i] = res['f_ee_mo'].flatten()
-        f_ee_obs[:,i] = res['f_ee_obs'].flatten()
-        x_ees += [res['x_ee']]
+        states[:,i] = np.concatenate((res_q, res_dq), axis=0)
+        #print([states[:,i]])
+        #states[:,i] = res['xi'].flatten()
+        #contact_pts[:,i] = res['cont_pt'].flatten()
+        #stiff[:,i] = res.get('stiff',np.zeros(3)).flatten()
+        #f_ee_mo[:,i] = res['f_ee_mo'].flatten()
+        #f_ee_obs[:,i] = res['f_ee_obs'].flatten()
+        #x_ees += [res['x_ee']]
     average_freq = (sum(update_freq)/traj_len)/1000
     print("Average update frequency is {} kHz".format(average_freq))
     fname = bag[:-4]+'.pkl'

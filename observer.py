@@ -2,6 +2,40 @@ import casadi as ca
 import numpy as np
 from robot import robot
 from scipy.stats import multivariate_normal
+import copy
+
+def static_ekf_update(cov, x, q, tau, dyn_sys, proc_noise, meas_noise, est_geom, est_stiff, F=None):
+    step_args = {'tau':tau,
+                 'xi':ca.vertcat(x['q'], x['dq'],
+                                     x.get('p', []),
+                                     x.get('stiff', []))}
+    x_next = dyn_sys.disc_dyn.call(step_args)
+    #print(x_next)
+    x_next = x_next["xi_next"]
+    #print(x_next)
+    A, C = dyn_sys.get_linearized(step_args)  # get the linearized dynamics and observation matrices
+    cov_next = A @ cov @ (A.T) + proc_noise
+    S = C @ cov_next @ (C.T) + meas_noise
+    y_hat = C @ x_next
+    L = cov_next @ C.T @ ca.inv(C @ cov_next @ (C.T) + meas_noise)  # calculate Kalman gain
+    if np.any(np.isnan(L)): raise ValueError("Nans in the L matrix")
+    xi_corr = x_next['xi_next'] + L @ (q - x_next['xi_next'][dyn_sys.nq])
+    x['q'] = xi_corr[:dyn_sys.nq].full()
+    x['dq'] = xi_corr[dyn_sys.nq:2 * dyn_sys.nq].full()
+    if est_geom: x['p'] = xi_corr[2 * dyn_sys.nq:].full()
+    if est_stiff: x['stiff'] = xi_corr[2 * dyn_sys.nq:].full().flatten()
+    x['cont_pt'] = x_next['cont_pt'].full().flatten()
+    x_ee = dyn_sys.fwd_kin(x['q'])
+    x['x_ee'] = (x_ee[0].full(),
+                      x_ee[1].full())
+    x['xi'] = xi_corr.full()
+    mom_obs.step(x_next['mom'], x_next['tau_err'])
+    x['f_ee_mo'] = (dyn_sys.jacpinv(x['q']) @ mom_obs.r).full()
+    x['f_ee_obs'] = -(dyn_sys.jacpinv(x['q']) @ x_next['tau_i']).full()
+
+    cov = (ca.DM.eye(dyn_sys.nx) - L @ C) @ cov_next  # corrected covariance
+
+    return x, cov, S, y_hat
 
 class ekf():
     """ This defines an EKF observer """
@@ -33,6 +67,8 @@ class ekf():
         
         self.meas_noise = np.diag(par['meas_noise']['pos'])
         self.mom_obs = MomentumObserver(par, q0)
+
+
         
     def step(self, q, tau, dyn_sys, F = None):
         """ Steps the observer based on the input at time t and observation at time t
@@ -45,20 +81,27 @@ class ekf():
         self.x_next = dyn_sys.disc_dyn.call(step_args)  # predict state and output at next time step
 
         x_next = self.x_next["xi_next"]
-        print(x_next.shape)
+        #print(x_next.shape)
         A, C = dyn_sys.get_linearized(step_args)   # get the linearized dynamics and observation matrices
-        print(C.shape)
+        #print(A)
         #print(f"F_i = {self.dyn_sys.jacpinv(self.x['q']).T@x_next['tau_err']}")
         #print(f"tau_err = {x_next['tau_err']}")
         #print(f"tau     = {tau}")
         #print(step_args['tau_err'])
         #print(q-x_next['xi_next'][:6])
         #print(A)
+        #print(np.argwhere(np.isnan(self.cov)))
         self.cov_next = A@self.cov@(A.T) + self.proc_noise
+        #print(C)
+
+        #print(self.cov)
         self.S = C@self.cov_next@(C.T) + self.meas_noise
         self.y_hat = C@x_next
-        #print(cov_next)
+        #print(self.y_hat.shape)
+        #print(self.cov_next)
         self.L = self.cov_next@C.T@ca.inv(C@self.cov_next@(C.T) + self.meas_noise) # calculate Kalman gain
+        #print(self.L)
+        #print(self.L.shape)
         if np.any(np.isnan(self.L)): raise ValueError("Nans in the L matrix")
     
         xi_corr = self.x_next['xi_next'] + self.L@(q - self.x_next['xi_next'][dyn_sys.nq])
@@ -77,8 +120,17 @@ class ekf():
         self.x['f_ee_mo'] = (dyn_sys.jacpinv(self.x['q'])@self.mom_obs.r).full()
         self.x['f_ee_obs'] = -(dyn_sys.jacpinv(self.x['q'])@self.x_next['tau_i']).full()
         
-        self.cov = (ca.DM.eye(dyn_sys.nx)-self.L@C)@self.cov_next # corrected covariance
+        self.cov = (ca.DM.eye(dyn_sys.nx)-self.L@C)@self.cov_next  # corrected covariance
+        #print("debug2")
+        #print(self.cov)
         #print(self.cov[-3:,-3:])
+<<<<<<< HEAD
+=======
+        #x_est = copy.deepcopy(self.x)
+        #cov_est = copy.deepcopy(self.cov)
+        #S = copy.deepcopy(self.S)
+        #y_hat = copy.deepcopy(self.y_hat)
+>>>>>>> 7602bebb7873e3a092fb6572ba285ec0c330ffab
         return self.x, self.cov, self.S, self.y_hat
 
     def likelihood(self, obs):
