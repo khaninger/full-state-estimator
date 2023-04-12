@@ -9,7 +9,7 @@ from geometry_msgs.msg import WrenchStamped
 import casadi as ca
 from observer import ekf
 from Hybrid_filter import HybridParticleFilter
-from robot import Robot
+from robot import Robot, RobotDict
 from helper_fns import *
 from param_fit import *
 import time

@@ -1,0 +1,4 @@
+num_particles: 20
+belief_init:
+  - 0.8
+  - 0.2

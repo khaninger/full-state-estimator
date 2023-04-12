@@ -2,7 +2,7 @@ import pdb
 import sys
 import numpy as np
 
-
+from scipy.stats import multivariate_normal
 import casadi as ca
 from robot import Robot
 import copy
@@ -23,17 +23,22 @@ class HybridParticleFilter:
 
         self.particles = []
         self.num_particles = par['num_particles']
-        self.trans_matrix = par['transition_matrix']
+        self.trans_matrix = np.array([[0.8, 0.2], [0.2, 0.8]])
         self.belief_free = par['belief_init'][0]
         self.belief_contact = par['belief_init'][1]
-        self.belief_init = par['belief_init']
-        self.x = {'mu': robot.xi_init, 'cov': robot.cov_init}
-        self.proc_noise = robot[0].proc_noise
-        self.meas_noise = robot[0].meas_noise
-        self.y_hat = np.zeros((self.num_particles, 6, 1))
-        self.S_t = np.zeros((self.num_particles, 6, 6))
+        self.belief_init = np.array(par['belief_init'])
+        self.x = {'mu': robot['free-space'].xi_init, 'cov': robot['free-space'].cov_init}
+        self.proc_noise = robot['free-space'][0].proc_noise
+        self.meas_noise = robot['free-space'][0].meas_noise
+        self.ny = robot['free-space'].ny
+        self.nq = robot['free-space'].nq
+        self.nx = robot['free-space'].nx
+
+        self.y_hat = np.zeros((self.num_particles, self.ny, 1))
+        self.S_t = np.zeros((self.num_particles, self.ny, self.ny))
         self.step_fn = {}
         self.modes_lst = list(robot.keys())  # getting the list of keys of robot dict, for mode sampling
+
         for k, v in robot.items():
             self.step_fn[k] = build_step_fn(v)
 
@@ -56,7 +61,7 @@ class HybridParticleFilter:
 
     def calc_weights(self, q):
         summation = 0
-        for i,particle in enumerate(self.particles):
+        for i, particle in enumerate(self.particles):
 
             particle.weight = multivariate_normal(mean=self.y_hat[i], cov=self.S_t[i]).pdf(q)
             #print(particle.weight)
@@ -77,15 +82,15 @@ class HybridParticleFilter:
             particle.mode_prev = np.array([self.belief_free, self.belief_contact])
 
     def estimate_state(self):
-        pos = np.zeros((self.num_particles, self.dyn_free.nq))
+        pos = np.zeros((self.num_particles, self.nq))
 
         weights = np.zeros(self.num_particles)
 
 
 
-        vel = np.zeros((self.num_particles, self.dyn_free.nq))
+        vel = np.zeros((self.num_particles, self.nq))
 
-        
+
         for i, particle in enumerate(self.particles):
             #print(pos[i, :])
             #print(particle.mu)
@@ -95,6 +100,7 @@ class HybridParticleFilter:
             vel[i,:] = particle.mu['dq'].ravel()
         self.x_hat = np.average(pos, weights=weights, axis=0)
         self.x_dot_hat = np.average(vel, weights=weights, axis=0)
+
     def MultinomialResample(self):
         states_idx = []
         weights = []

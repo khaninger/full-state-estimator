@@ -3,7 +3,7 @@ import pinocchio.casadi as cpin
 import numpy as np
 import casadi as ca
 from casadi_kin_dyn import pycasadi_kin_dyn
-
+import ruamel.yaml
 from contact import Contact
 
 class Robot():
@@ -144,3 +144,40 @@ class Robot():
 
     def get_linearized(self, state):
         return self.A.call(state)['A'], self.C
+
+
+class RobotDict():
+    """
+    This class creates the dictionary of robot instances according to different configuration files,
+    associated with different dynamic models.
+
+    """
+
+    def __init__(self, file_path=None):
+        self.param_dict = {}
+        if file_path:
+            self.load_robot_models(file_path)
+
+    def yaml_load(self, path):
+        yaml_file = open(path, 'r')
+        yaml_content = ruamel.yaml.load(yaml_file, Loader=ruamel.yaml.Loader)
+        local_list = []
+        for key, value in yaml_content.items():
+            if key.startswith('contact_1'):
+                value = ca.DM(value)
+            local_list.append((key, value))
+        final_dict = dict(local_list)
+        model_name = final_dict['model']
+        return model_name, final_dict
+
+    def load_robot_models(self, filepath):
+        dict_lst = []
+        for i in range(len(filepath)):
+            dict_lst.append((self.yaml_load(filepath[i])[0], self.yaml_load(filepath[i])[1]))
+        save_dict = dict(dict_lst)
+        for value in save_dict.values():
+            key = value['model']
+            print(f"loading model: {key}")
+            model = Robot(value)
+            self.param_dict[key] = model
+
