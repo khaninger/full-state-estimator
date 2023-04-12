@@ -154,6 +154,10 @@ class RobotDict():
     """
 
     def __init__(self, file_path=None):
+        """
+        file_path: list of file_paths associated to different configuration files.
+
+        """
         self.param_dict = {}
         if file_path:
             self.load_robot_models(file_path)
