@@ -10,7 +10,7 @@ from observer import build_step_fn
 
 
 class HybridParticleFilter:
-    def __init__(self,  par, robot):
+    def __init__(self, robot):
         """
         par: dictionary of particle filter parameters
         robot: dictionary of robot instances according to different  dynamic models
@@ -22,11 +22,12 @@ class HybridParticleFilter:
 
 
         self.particles = []
-        self.num_particles = par['num_particles']
+        self.num_particles = 20
         self.trans_matrix = np.array([[0.8, 0.2], [0.2, 0.8]])
-        self.belief_free = par['belief_init'][0]
-        self.belief_contact = par['belief_init'][1]
-        self.belief_init = np.array(par['belief_init'])
+        self.belief_init = np.array([0.8, 0.2])
+        self.belief_free = 0.8
+        self.belief_contact = 0.2
+
         self.x = {'mu': robot['free-space'].xi_init, 'cov': robot['free-space'].cov_init}
         self.proc_noise = robot['free-space'][0].proc_noise
         self.meas_noise = robot['free-space'][0].meas_noise
@@ -98,8 +99,8 @@ class HybridParticleFilter:
             #print(pos[i,:])
             weights[i] = particle.weight
             vel[i,:] = particle.mu['dq'].ravel()
-        self.x_hat = np.average(pos, weights=weights, axis=0)
-        self.x_dot_hat = np.average(vel, weights=weights, axis=0)
+        self.x["mu"] = np.average(pos, weights=weights, axis=0)
+        self.x["cov"] = np.average(vel, weights=weights, axis=0)
 
     def MultinomialResample(self):
         states_idx = []
@@ -118,12 +119,12 @@ class HybridParticleFilter:
 
         self.particles = resamp_parts
 
-    def RunFilter(self, q, tau, F=None):
+    def step(self, q, tau, F=None):
         self.propagate(q,  tau, F=None)
         self.calc_weights(q)
         self.MultinomialResample()
         self.estimate_state()
-        return self.x_hat, self.x_dot_hat, self.belief_free, self.belief_contact
+        return self.x, self.belief_free, self.belief_contact
 
 class Particle:
     def __init__(self, mode_0, mu_0, P0, weight0, sampled_mode0):

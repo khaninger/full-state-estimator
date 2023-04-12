@@ -72,12 +72,11 @@ class ros_observer():
         self.f_ee_mo_pub  = rospy.Publisher('force_ee_mo',  JointState, queue_size=1)
 
         self.params = init_rosparams()
+        #self.params = RobotDict(["full-state-estimator/config_files/contact.yaml", "full-state-estimator/config_files/free_space.yaml"])
 
         self.robot = Robot(self.params, est_pars = est_pars)
-        #self.observer = ekf(self.robot)
-        self.observer = HybridParticleFilter(self.params,
-                            np.array([2.29, -1.02, -0.9, -2.87, 1.55, 0.56]),
-                            est_geom, est_stiff)
+        self.observer = ekf(self.robot)
+        #self.observer = HybridParticleFilter(self.params)
         
     def joint_callback(self, msg):
         """ To be called when the joint_state topic is published with joint position and torques """
@@ -133,7 +132,7 @@ def generate_traj(bag, est_pars = {}):
 
     robot = Robot(p, est_pars = est_pars)
     observer = ekf(robot)
-    #observer = HybridParticleFilter(p, robot_dict)      
+    #observer = HybridParticleFilter(["full-state-estimator/config_files/contact.yaml", "full-state-estimator/config_files/free_space.yaml"])
     num_msgs = len(msgs['pos'].T)
 
     sd_initial = robot.get_statedict(robot.xi_init)
@@ -157,10 +156,10 @@ def generate_traj(bag, est_pars = {}):
         #    print(observer.cov)
 
         tic = time.perf_counter()
-        res = observer.step(q = msgs['pos'][:,i], tau = msgs['torque'][:,i])
+        res = observer.step(q = msgs['pos'][:,i], tau = msgs['torque'][:,i])[0]
         toc = time.perf_counter()
         update_freq.append(1/(toc-tic))
-        #print(res['mu'][:6])
+        print(res['mu'][:6])
         statedict = robot.get_statedict(res['mu'])
         for k,v in statedict.items():
             results[k][:,[i]] = v
