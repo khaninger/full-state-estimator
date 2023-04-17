@@ -19,16 +19,18 @@ def build_step_fn(robot):
     
     cov_next = A@cov@(A.T) + proc_noise
     L = cov_next@C.T@ca.inv(C@cov_next@(C.T) + meas_noise) # calculate Kalman gain
+    y_hat = C@mu
+    S_hat = C@cov_next@(C.T) + meas_noise
 
     mu_next_corr = mu_next + L@(q_meas - mu_next[:robot.nq])
     cov_next_corr = (ca.SX.eye(robot.nx)-L@C)@cov_next # corrected covariance
 
     fn_dict = {'tau':tau, 'mu':mu, 'cov':cov, 'q_meas':q_meas,
-               'mu_next':mu_next_corr, 'cov_next':cov_next_corr}
+               'mu_next':mu_next_corr, 'cov_next':cov_next_corr, 'y_hat': y_hat, 'S_hat': S_hat}
     
     step_fn = ca.Function('ekf_step', fn_dict,
                           ['tau', 'mu', 'cov', 'q_meas'], # inputs to casadi function
-                          ['mu_next', 'cov_next'])        # outputs of casadi function
+                          ['mu_next', 'cov_next', 'S_hat', 'y_hat'])        # outputs of casadi function
     return step_fn
 
 class ekf():

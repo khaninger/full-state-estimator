@@ -153,14 +153,14 @@ class RobotDict():
 
     """
 
-    def __init__(self, file_path=None):
+    def __init__(self, file_path=None, est_par={}):
         """
         file_path: list of file_paths associated to different configuration files.
 
         """
         self.param_dict = {}
         if file_path:
-            self.load_robot_models(file_path)
+            self.load_robot_models(file_path, est_par)
 
     def yaml_load(self, path):
         yaml_file = open(path, 'r')
@@ -174,7 +174,7 @@ class RobotDict():
         model_name = final_dict['model']
         return model_name, final_dict
 
-    def load_robot_models(self, filepath):
+    def load_robot_models(self, filepath, est_pars):
         dict_lst = []
         for i in range(len(filepath)):
             dict_lst.append((self.yaml_load(filepath[i])[0], self.yaml_load(filepath[i])[1]))
@@ -182,6 +182,6 @@ class RobotDict():
         for value in save_dict.values():
             key = value['model']
             print(f"loading model: {key}")
-            model = Robot(value)
+            model = Robot(value, est_pars)
             self.param_dict[key] = model
 

@@ -71,12 +71,12 @@ class ros_observer():
         self.f_ee_obs_pub = rospy.Publisher('force_ee_obs', JointState, queue_size=1)
         self.f_ee_mo_pub  = rospy.Publisher('force_ee_mo',  JointState, queue_size=1)
 
-        self.params = init_rosparams()
-        #self.params = RobotDict(["full-state-estimator/config_files/contact.yaml", "full-state-estimator/config_files/free_space.yaml"])
+        #self.params = init_rosparams()
+        self.params = RobotDict(["full-state-estimator/config_files/contact.yaml", "full-state-estimator/config_files/free_space.yaml"], est_pars).param_dict
 
-        self.robot = Robot(self.params, est_pars = est_pars)
-        self.observer = ekf(self.robot)
-        #self.observer = HybridParticleFilter(self.params)
+        #self.robot = Robot(self.params, est_pars = est_pars)
+        #self.observer = ekf(self.robot)
+        self.observer = HybridParticleFilter(self.params)
         
     def joint_callback(self, msg):
         """ To be called when the joint_state topic is published with joint position and torques """
@@ -125,17 +125,18 @@ def start_node(est_pars):
 
 def generate_traj(bag, est_pars = {}):
     print('Generating trajectory from {}'.format(bag))
-    p = init_rosparams()
+    #p = init_rosparams()
     msgs = bag_loader(bag, map_joint_state, topic_name = 'joint_states')
     force_unaligned = bag_loader(bag, map_wrench, topic_name = 'wrench')
     force = get_aligned_msgs(msgs, force_unaligned)
 
-    robot = Robot(p, est_pars = est_pars)
-    observer = ekf(robot)
-    #observer = HybridParticleFilter(["full-state-estimator/config_files/contact.yaml", "full-state-estimator/config_files/free_space.yaml"])
+    #robot = Robot(p, est_pars = est_pars)
+    #observer = ekf(robot)
+    params = RobotDict(["config_files/contact.yaml", "config_files/free_space.yaml"], est_pars)
+    observer = HybridParticleFilter(params)
     num_msgs = len(msgs['pos'].T)
 
-    sd_initial = robot.get_statedict(robot.xi_init)
+    sd_initial = observer.get_statedict()
     results = {k:np.zeros((v.shape[0], num_msgs)) for k,v in sd_initial.items()}
     results['true_pos'] = msgs['pos']
     results['true_vel'] = msgs['vel']
@@ -159,8 +160,8 @@ def generate_traj(bag, est_pars = {}):
         res = observer.step(q = msgs['pos'][:,i], tau = msgs['torque'][:,i])[0]
         toc = time.perf_counter()
         update_freq.append(1/(toc-tic))
-        print(res['mu'][:6])
-        statedict = robot.get_statedict(res['mu'])
+        #print(res['mu'][:6])
+        statedict = observer.get_statedict()
         for k,v in statedict.items():
             results[k][:,[i]] = v
 
