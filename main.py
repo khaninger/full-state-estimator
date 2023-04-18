@@ -71,13 +71,12 @@ class ros_observer():
         self.f_ee_obs_pub = rospy.Publisher('force_ee_obs', JointState, queue_size=1)
         self.f_ee_mo_pub  = rospy.Publisher('force_ee_mo',  JointState, queue_size=1)
 
-        self.params = init_rosparams()
+        #self.params = init_rosparams()
+        self.params = RobotDict(["full-state-estimator/config_files/contact.yaml", "full-state-estimator/config_files/free_space.yaml"], est_pars).param_dict
 
-        self.robot = Robot(self.params, est_pars = est_pars)
+        #self.robot = Robot(self.params, est_pars = est_pars)
         #self.observer = ekf(self.robot)
-        self.observer = HybridParticleFilter(self.params,
-                            np.array([2.29, -1.02, -0.9, -2.87, 1.55, 0.56]),
-                            est_geom, est_stiff)
+        self.observer = HybridParticleFilter(self.params)
         
     def joint_callback(self, msg):
         """ To be called when the joint_state topic is published with joint position and torques """
@@ -126,14 +125,15 @@ def start_node(est_pars):
 
 def generate_traj(bag, est_pars = {}):
     print('Generating trajectory from {}'.format(bag))
-    p = init_rosparams()
+    #p = init_rosparams()
     msgs = bag_loader(bag, map_joint_state, topic_name = 'joint_states')
     force_unaligned = bag_loader(bag, map_wrench, topic_name = 'wrench')
     force = get_aligned_msgs(msgs, force_unaligned)
 
-    robot = Robot(p, est_pars = est_pars)
-    observer = ekf(robot)
-    #observer = HybridParticleFilter(p, robot_dict)      
+    #robot = Robot(p, est_pars = est_pars)
+    #observer = ekf(robot)
+    params = RobotDict(["config_files/contact.yaml", "config_files/free_space.yaml"], est_pars)
+    observer = HybridParticleFilter(params)
     num_msgs = len(msgs['pos'].T)
 
     sd_initial = observer.get_statedict()
@@ -157,7 +157,7 @@ def generate_traj(bag, est_pars = {}):
         #    print(observer.cov)
 
         tic = time.perf_counter()
-        res = observer.step(q = msgs['pos'][:,i], tau = msgs['torque'][:,i])
+        res = observer.step(q = msgs['pos'][:,i], tau = msgs['torque'][:,i])[0]
         toc = time.perf_counter()
         update_freq.append(1/(toc-tic))
         #print(res['mu'][:6])

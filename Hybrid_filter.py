@@ -10,7 +10,7 @@ from observer import build_step_fn
 
 
 class HybridParticleFilter:
-    def __init__(self,  par, robot):
+    def __init__(self, robot):
         """
         par: dictionary of particle filter parameters
         robot: dictionary of robot instances according to different  dynamic models
@@ -22,25 +22,29 @@ class HybridParticleFilter:
 
 
         self.particles = []
-        self.num_particles = par['num_particles']
+        self.num_particles = 20
         self.trans_matrix = np.array([[0.8, 0.2], [0.2, 0.8]])
-        self.belief_free = par['belief_init'][0]
-        self.belief_contact = par['belief_init'][1]
-        self.belief_init = np.array(par['belief_init'])
-        self.x = {'mu': robot['free-space'].xi_init, 'cov': robot['free-space'].cov_init}
-        self.proc_noise = robot['free-space'][0].proc_noise
-        self.meas_noise = robot['free-space'][0].meas_noise
-        self.ny = robot['free-space'].ny
-        self.nq = robot['free-space'].nq
-        self.nx = robot['free-space'].nx
+        self.belief_init = np.array([0.8, 0.2])
+        self.belief_free = 0.8
+        self.belief_contact = 0.2
+        self.robot_dict = robot.param_dict
+
+        self.x = {'mu': self.robot_dict['free-space'].xi_init, 'cov': self.robot_dict['free-space'].cov_init}
+        #print(self.x['mu'])
+        self.proc_noise = self.robot_dict['free-space'].proc_noise
+        self.meas_noise = self.robot_dict['free-space'].meas_noise
+        self.ny = self.robot_dict['free-space'].ny
+        self.nq = self.robot_dict['free-space'].nq
+        self.nx = self.robot_dict['free-space'].nx
 
         self.y_hat = np.zeros((self.num_particles, self.ny, 1))
         self.S_t = np.zeros((self.num_particles, self.ny, self.ny))
         self.step_fn = {}
-        self.modes_lst = list(robot.keys())  # getting the list of keys of robot dict, for mode sampling
+        self.modes_lst = list(self.robot_dict.keys())  # getting the list of keys of robot dict, for mode sampling
 
-        for k, v in robot.items():
+        for k, v in self.robot_dict.items():
             self.step_fn[k] = build_step_fn(v)
+        #print(self.step_fn["free-space"])
 
 
         for i in range(self.num_particles):
@@ -52,6 +56,7 @@ class HybridParticleFilter:
             particle.mode = np.matmul(particle.mode_prev, self.trans_matrix)
             particle.sampled_mode = np.random.choice(self.modes_lst, p=particle.mode)
             particle.mu, particle.Sigma, self.S_t[i], self.y_hat[i] = self.step_fn[particle.sampled_mode](tau, particle.mu_prev, particle.Sigma_prev, q)
+            #print(particle.mu)
             particle.mu_prev = particle.mu
             particle.Sigma_prev = particle.Sigma
 
@@ -62,8 +67,9 @@ class HybridParticleFilter:
     def calc_weights(self, q):
         summation = 0
         for i, particle in enumerate(self.particles):
+            #print(self.y_hat[i].shape)
 
-            particle.weight = multivariate_normal(mean=self.y_hat[i], cov=self.S_t[i]).pdf(q)
+            particle.weight = multivariate_normal(mean=self.y_hat[i].ravel(), cov=self.S_t[i]).pdf(q)
             #print(particle.weight)
             if particle.weight<1e-15:
 
@@ -78,28 +84,31 @@ class HybridParticleFilter:
             self.weightsum += particle.weight
         self.belief_free = sum([particle.weight for particle in self.particles if particle.sampled_mode == 'free-space'])
         self.belief_contact = sum([particle.weight for particle in self.particles if particle.sampled_mode == 'contact'])
+        #print(self.belief_free)
         for particle in self.particles:
             particle.mode_prev = np.array([self.belief_free, self.belief_contact])
 
     def estimate_state(self):
-        pos = np.zeros((self.num_particles, self.nq))
+        pos = ca.DM(self.num_particles, self.nq)
 
         weights = np.zeros(self.num_particles)
 
 
 
-        vel = np.zeros((self.num_particles, self.nq))
+
+        vel = ca.DM(self.num_particles, self.nq)
 
 
         for i, particle in enumerate(self.particles):
             #print(pos[i, :])
-            #print(particle.mu)
-            pos[i,:] = particle.mu['q'].ravel()
-            #print(pos[i,:])
+            #print(particle.mu[:6].shape)
+            pos[i,:] = particle.mu[:6]
+            #print(particle.weight)
             weights[i] = particle.weight
-            vel[i,:] = particle.mu['dq'].ravel()
-        self.x_hat = np.average(pos, weights=weights, axis=0)
-        self.x_dot_hat = np.average(vel, weights=weights, axis=0)
+            vel[i,:] = particle.mu[-6:]
+        #print(weights.shape)
+        self.x['mu'][:6] = np.average(pos, weights=weights, axis=0)
+        self.x["mu"][-6:]= np.average(vel, weights=weights, axis=0)
 
     def MultinomialResample(self):
         states_idx = []
@@ -118,12 +127,15 @@ class HybridParticleFilter:
 
         self.particles = resamp_parts
 
-    def RunFilter(self, q, tau, F=None):
+    def get_statedict(self):
+        return {}
+
+    def step(self, q, tau, F=None):
         self.propagate(q,  tau, F=None)
         self.calc_weights(q)
         self.MultinomialResample()
         self.estimate_state()
-        return self.x_hat, self.x_dot_hat, self.belief_free, self.belief_contact
+        return self.x, self.belief_free, self.belief_contact
 
 class Particle:
     def __init__(self, mode_0, mu_0, P0, weight0, sampled_mode0):
