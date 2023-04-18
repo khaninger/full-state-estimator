@@ -28,7 +28,7 @@ class HybridParticleFilter:
         self.belief_free = 0.8
         self.belief_contact = 0.2
         self.robot_dict = robot.param_dict
-
+        self.N_eff = 0
         self.x = {'mu': self.robot_dict['free-space'].xi_init, 'cov': self.robot_dict['free-space'].cov_init}
         #print(self.x['mu'])
         self.proc_noise = self.robot_dict['free-space'].proc_noise
@@ -81,7 +81,8 @@ class HybridParticleFilter:
             if particle.weight == 0:
                 particle.weight = sys.float_info.epsilon
             #print(particle.weight)
-            self.weightsum += particle.weight
+            self.weightsum += particle.weight**2
+        self.N_eff = 1/self.weightsum  # effective number of particles, needed for resampling step
         self.belief_free = sum([particle.weight for particle in self.particles if particle.sampled_mode == 'free-space'])
         self.belief_contact = sum([particle.weight for particle in self.particles if particle.sampled_mode == 'contact'])
         #print(self.belief_free)
@@ -108,7 +109,7 @@ class HybridParticleFilter:
             vel[i,:] = particle.mu[-6:]
         #print(weights.shape)
         self.x['mu'][:6] = np.average(pos, weights=weights, axis=0)
-        self.x["mu"][-6:]= np.average(vel, weights=weights, axis=0)
+        self.x["mu"][-6:] = np.average(vel, weights=weights, axis=0)
 
     def MultinomialResample(self):
         states_idx = []
@@ -127,14 +128,38 @@ class HybridParticleFilter:
 
         self.particles = resamp_parts
 
+    def StratifiedResampling(self):
+        n = 0
+        m = 0
+        new_samples = []
+        weights = [particle.weight for particle in self.particles]
+        Q = np.cumsum(weights).tolist()
+        while n < self.num_particles:
+            u0 = np.random.uniform(1e-10, 1.0 / self.num_particles, 1)[0]
+            u = u0 + float(n) / self.num_particles
+            while Q[m] < u:
+                m += 1
+            new_samples.append(copy.deepcopy(self.particles[m]))
+            n += 1
+
+        self.particles = new_samples
+
+
+
+
     def get_statedict(self):
         return {}
 
     def step(self, q, tau, F=None):
-        self.propagate(q,  tau, F=None)
-        self.calc_weights(q)
-        self.MultinomialResample()
-        self.estimate_state()
+        if self.N_eff < self.num_particles/4:
+            self.propagate(q,  tau, F=None)
+            self.calc_weights(q)
+            self.MultinomialResample()  # if self.N_eff < self.num_particles/4
+            self.estimate_state()
+        else:
+            self.propagate(q, tau, F=None)
+            self.calc_weights(q)
+            self.estimate_state()
         return self.x, self.belief_free, self.belief_contact
 
 class Particle:
