@@ -48,6 +48,8 @@ class ekf():
         self.x['cov'] = res['cov_next']
         return self.x
 
+    def get_statedict(self):
+        return self.dyn_sys.get_statedict(self.x['mu'])
     def likelihood(self, obs):
         return NotImplemented
 

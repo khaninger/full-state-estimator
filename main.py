@@ -136,7 +136,7 @@ def generate_traj(bag, est_pars = {}):
     #observer = HybridParticleFilter(p, robot_dict)      
     num_msgs = len(msgs['pos'].T)
 
-    sd_initial = robot.get_statedict(robot.xi_init)
+    sd_initial = observer.get_statedict()
     results = {k:np.zeros((v.shape[0], num_msgs)) for k,v in sd_initial.items()}
     results['true_pos'] = msgs['pos']
     results['true_vel'] = msgs['vel']
@@ -161,7 +161,7 @@ def generate_traj(bag, est_pars = {}):
         toc = time.perf_counter()
         update_freq.append(1/(toc-tic))
         #print(res['mu'][:6])
-        statedict = robot.get_statedict(res['mu'])
+        statedict = observer.get_statedict()
         for k,v in statedict.items():
             results[k][:,[i]] = v
 
