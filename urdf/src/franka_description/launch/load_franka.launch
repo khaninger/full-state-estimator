@@ -1,0 +1,6 @@
+<?xml version="1.0" ?>
+<launch>
+
+  <param name="robot_description" command="$(find xacro)/xacro $(find franka_description)/robots/fr3/fr3.urdf.xacro hand:=True gazebo:=True"/>
+
+</launch>
