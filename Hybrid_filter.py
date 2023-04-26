@@ -56,8 +56,8 @@ class HybridParticleFilter:
         for i, particle in enumerate(self.particles):
             particle.mode = np.matmul(particle.mode_prev, self.trans_matrix)
             particle.sampled_mode = np.random.choice(self.modes_lst, p=particle.mode)
-            particle.mu, particle.Sigma, self.S_t[i], self.y_hat[i] = self.step_fn[particle.sampled_mode](tau, particle.mu_prev, particle.Sigma_prev, q)
-            #print(particle.mu)
+            particle.mu, particle.Sigma, self.S_t[i], self.y_hat[i], particle.weight = self.step_fn[particle.sampled_mode](tau, particle.mu_prev, particle.Sigma_prev, q)
+            #print(particle.weight.size)
             particle.mu_prev = particle.mu
             particle.Sigma_prev = particle.Sigma
             #particle.weight = multivariate_normal(mean=self.y_hat[i].ravel(), cov=self.S_t[i]).pdf(q)
@@ -69,8 +69,9 @@ class HybridParticleFilter:
         summation = 0
         for i, particle in enumerate(self.particles):
             #print(self.y_hat[i].shape)
+            particle.weight = float(particle.weight)
 
-            particle.weight = multivariate_normal(mean=self.y_hat[i].ravel(), cov=self.S_t[i]).pdf(q)
+            #particle.weight = multivariate_normal(mean=self.y_hat[i].ravel(), cov=self.S_t[i]).pdf(q)
             #print(particle.weight)
             if particle.weight<1e-15:
 
@@ -86,9 +87,10 @@ class HybridParticleFilter:
         self.N_eff = 1/self.weightsum  # effective number of particles, needed for resampling step
         self.belief_free = sum([particle.weight for particle in self.particles if particle.sampled_mode == 'free-space'])
         self.belief_contact = sum([particle.weight for particle in self.particles if particle.sampled_mode == 'contact'])
-        #print(self.belief_free)
+        #print(self.belief_contact)
         for particle in self.particles:
             particle.mode_prev = np.array([self.belief_free, self.belief_contact])
+
 
     def estimate_state(self):
         pos = ca.DM(self.num_particles, self.nq)
@@ -152,16 +154,12 @@ class HybridParticleFilter:
         return {}
 
     def step(self, q, tau, F=None):
-        if self.N_eff < self.num_particles/5:
-            self.propagate(q,  tau, F=None)
-            self.calc_weights(q)
-            #self.StratifiedResampling()
-            self.MultinomialResample()  # if self.N_eff < self.num_particles/4 #self.N_eff < self.num_particles/4:
-            self.estimate_state()
-        else:
-            self.propagate(q, tau, F=None)
-            self.calc_weights(q)
-            self.estimate_state()
+        self.propagate(q, tau, F=None)
+        self.calc_weights(q)
+        if self.N_eff < self.num_particles/4:
+            self.StratifiedResampling()
+        self.estimate_state()
+
         return self.x, self.belief_free, self.belief_contact
 
 class Particle:
