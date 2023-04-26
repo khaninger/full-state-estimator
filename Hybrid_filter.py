@@ -55,8 +55,8 @@ class HybridParticleFilter:
         for i, particle in enumerate(self.particles):
             particle.mode = np.matmul(particle.mode_prev, self.trans_matrix)
             particle.sampled_mode = np.random.choice(self.modes_lst, p=particle.mode)
-            particle.mu, particle.Sigma, self.S_t[i], self.y_hat[i] = self.step_fn[particle.sampled_mode](tau, particle.mu_prev, particle.Sigma_prev, q)
-            #print(particle.mu)
+            particle.mu, particle.Sigma, self.S_t[i], self.y_hat[i], particle.weight = self.step_fn[particle.sampled_mode](tau, particle.mu_prev, particle.Sigma_prev, q)
+            
             particle.mu_prev = particle.mu
             particle.Sigma_prev = particle.Sigma
 
@@ -69,7 +69,7 @@ class HybridParticleFilter:
         for i, particle in enumerate(self.particles):
             #print(self.y_hat[i].shape)
 
-            particle.weight = multivariate_normal(mean=self.y_hat[i].ravel(), cov=self.S_t[i]).pdf(q)
+            #particle.weight = multivariate_normal(mean=self.y_hat[i].ravel(), cov=self.S_t[i]).pdf(q)
             #print(particle.weight)
             if particle.weight<1e-15:
 
@@ -151,15 +151,13 @@ class HybridParticleFilter:
         return {}
 
     def step(self, q, tau, F=None):
+        self.propagate(q, tau, F=None)
+        self.calc_weights(q)
         if self.N_eff < self.num_particles/4:
-            self.propagate(q,  tau, F=None)
-            self.calc_weights(q)
-            self.MultinomialResample()  # if self.N_eff < self.num_particles/4
-            self.estimate_state()
-        else:
-            self.propagate(q, tau, F=None)
-            self.calc_weights(q)
-            self.estimate_state()
+            self.MultinomialResample()
+
+        self.estimate_state()
+
         return self.x, self.belief_free, self.belief_contact
 
 class Particle:
