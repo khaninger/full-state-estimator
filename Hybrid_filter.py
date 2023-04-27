@@ -27,22 +27,22 @@ class HybridParticleFilter:
         self.belief_init = np.array([0.8, 0.2])
         self.belief_free = 0.8
         self.belief_contact = 0.2
-        self.robot_dict = robot.param_dict
+        #self.robot_dict = robot.param_dict
         self.N_eff = 0
-        self.x = {'mu': self.robot_dict['free-space'].xi_init, 'cov': self.robot_dict['free-space'].cov_init}
+        self.x = {'mu': robot['free-space'].xi_init, 'cov': robot['free-space'].cov_init}
         #print(self.x['mu'])
-        self.proc_noise = self.robot_dict['free-space'].proc_noise
-        self.meas_noise = self.robot_dict['free-space'].meas_noise
-        self.ny = self.robot_dict['free-space'].ny
-        self.nq = self.robot_dict['free-space'].nq
-        self.nx = self.robot_dict['free-space'].nx
+        self.proc_noise = robot['free-space'].proc_noise
+        self.meas_noise = robot['free-space'].meas_noise
+        self.ny = robot['free-space'].ny
+        self.nq = robot['free-space'].nq
+        self.nx = robot['free-space'].nx
 
         self.y_hat = np.zeros((self.num_particles, self.ny, 1))
         self.S_t = np.zeros((self.num_particles, self.ny, self.ny))
         self.step_fn = {}
-        self.modes_lst = list(self.robot_dict.keys())  # getting the list of keys of robot dict, for mode sampling
+        self.modes_lst = list(robot.keys())  # getting the list of keys of robot dict, for mode sampling
 
-        for k, v in self.robot_dict.items():
+        for k, v in robot.items():
             self.step_fn[k] = build_step_fn(v)
         #print(self.step_fn["free-space"])
 
@@ -60,7 +60,7 @@ class HybridParticleFilter:
             #print(particle.weight.size)
             particle.mu_prev = particle.mu
             particle.Sigma_prev = particle.Sigma
-            #particle.weight = multivariate_normal(mean=self.y_hat[i].ravel(), cov=self.S_t[i]).pdf(q)
+            #print(particle.Sigma.shape)
 
 
 
@@ -96,6 +96,7 @@ class HybridParticleFilter:
         pos = ca.DM(self.num_particles, self.nq)
 
         weights = np.zeros(self.num_particles)
+        cov = np.zeros([self.num_particles, 2*self.nq, 2*self.nq])
 
 
 
@@ -110,9 +111,12 @@ class HybridParticleFilter:
             #print(particle.weight)
             weights[i] = particle.weight
             vel[i,:] = particle.mu[-6:]
+            cov[i] = particle.Sigma
         #print(weights.shape)
         self.x['mu'][:6] = np.average(pos, weights=weights, axis=0)
         self.x["mu"][-6:] = np.average(vel, weights=weights, axis=0)
+        self.x["cov"] = np.average(cov, weights=weights, axis=0)
+        #print(self.x["cov"].shape)
 
     def MultinomialResample(self):
         states_idx = []
@@ -156,7 +160,7 @@ class HybridParticleFilter:
     def step(self, q, tau, F=None):
         self.propagate(q, tau, F=None)
         self.calc_weights(q)
-        if self.N_eff < self.num_particles/4:
+        if self.N_eff < self.num_particles/5:
             self.StratifiedResampling()
         self.estimate_state()
 

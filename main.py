@@ -16,8 +16,10 @@ import time
 
 def init_rosparams():
     p = {}
-    p['urdf_path'] = rospy.get_param('urdf_description', 'urdf/src/universal_robot/ur_description/urdf/ur16e.urdf')
     p['urdf'] = rospy.get_param('robot_description')
+    #p['urdf_path'] = rospy.get_param('urdf_description', 'urdf/src/universal_robot/ur_description/urdf/ur16e.urdf')
+    p['urdf_path'] = rospy.get_param('urdf_description', 'urdf/src/universal_robot/franka_description/robots/fr3.urdf')
+    # TODO: update for franka emika, should be in order
     p['joint_names'] = [ 'shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_joint',
                          'wrist_1_joint', 'wrist_2_joint', 'wrist_3_joint']
 
@@ -59,11 +61,11 @@ class ros_observer():
         self.tau = None      # motor torque
         self.F = None        # EE force
         self.x = None        # observer state
-
+        #print(joint_topic)
         self.joint_sub = rospy.Subscriber(joint_topic, JointState,
                                            self.joint_callback, queue_size=1)
-        self.force_sub = rospy.Subscriber(force_topic, WrenchStamped,
-                                          self.force_callback, queue_size=1)
+        #self.force_sub = rospy.Subscriber(force_topic, WrenchStamped,
+        #                                  self.force_callback, queue_size=1)
         self.joint_pub = rospy.Publisher('observer_jt',
                                          JointState, queue_size=1)
         self.ee_pub = rospy.Publisher('observer_ee',
@@ -72,7 +74,7 @@ class ros_observer():
         self.f_ee_mo_pub  = rospy.Publisher('force_ee_mo',  JointState, queue_size=1)
 
         #self.params = init_rosparams()
-        self.params = RobotDict(["full-state-estimator/config_files/contact.yaml", "full-state-estimator/config_files/free_space.yaml"], est_pars).param_dict
+        self.params = RobotDict(["config_files/contact.yaml", "config_files/free_space.yaml"], est_pars).param_dict
 
         #self.robot = Robot(self.params, est_pars = est_pars)
         #self.observer = ekf(self.robot)
@@ -100,7 +102,7 @@ class ros_observer():
     def observer_update(self):
         self.x = self.observer.step(q = self.q,
                                     tau = self.tau,
-                                    F = self.F)
+                                    F = self.F)[0]
 
     def publish_state(self):
         ddq = self.x.get('ddq', np.zeros(self.observer.dyn_sys.nq))
@@ -119,7 +121,7 @@ class ros_observer():
 
 def start_node(est_pars):
     rospy.init_node('observer')
-    node = ros_observer(est_pars)
+    node = ros_observer(est_pars=est_pars)
     rospy.on_shutdown(node.shutdown)  # Set shutdown to be executed when ROS exits
     rospy.spin()
 
@@ -132,7 +134,7 @@ def generate_traj(bag, est_pars = {}):
 
     #robot = Robot(p, est_pars = est_pars)
     #observer = ekf(robot)
-    params = RobotDict(["config_files/contact.yaml", "config_files/free_space.yaml"], est_pars)
+    params = RobotDict(["config_files/contact.yaml", "config_files/free_space.yaml"], est_pars).param_dict
     observer = HybridParticleFilter(params)
     num_msgs = len(msgs['pos'].T)
 
