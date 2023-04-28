@@ -171,6 +171,7 @@ class RobotDict():
                 value = ca.DM(value)
             local_list.append((key, value))
         final_dict = dict(local_list)
+        final_dict.update(robot_model_dict)
         model_name = final_dict['model']
         return model_name, final_dict
 
