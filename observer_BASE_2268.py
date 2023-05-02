@@ -13,7 +13,7 @@ def build_step_fn(robot):
     mu = robot.vars['xi']
     mu_next = robot.vars['xi_next']
     A, C = robot.get_linearized({'tau':tau, 'xi':mu})
-    N = robot.nq
+
     q_meas = ca.SX.sym('q_meas', robot.nq)
     cov = ca.SX.sym('cov', mu.shape[0], mu.shape[0])
     
@@ -21,25 +21,16 @@ def build_step_fn(robot):
     L = cov_next@C.T@ca.inv(C@cov_next@(C.T) + meas_noise) # calculate Kalman gain
     y_hat = C@mu
     S_hat = C@cov_next@(C.T) + meas_noise
-    temp1 = ca.det(S_hat)**(-1/2)
-<<<<<<< HEAD
-    temp2 = ca.exp(-0.5*(q_meas-y_hat).transpose @ ca.inv(S_hat) @ (q_meas-y_hat))
+
     mu_next_corr = mu_next + L@(q_meas - mu_next[:robot.nq])
     cov_next_corr = (ca.SX.eye(robot.nx)-L@C)@cov_next # corrected covariance
-    likelihood = (2 * np.pi) ** (-N/2) * temp1 * temp2
-=======
-    temp2 = ca.exp(-0.5*ca.transpose(q_meas-y_hat) @ ca.inv(S_hat) @ (q_meas-y_hat))
-    mu_next_corr = mu_next + L@(q_meas - mu_next[:robot.nq])
-    cov_next_corr = (ca.SX.eye(robot.nx)-L@C)@cov_next # corrected covariance
-    likelihood = (2*np.pi)**(-N/2)*temp1*temp2
->>>>>>> dafb85ca37f683c7ac946c741c88b08f50fe3546
+
     fn_dict = {'tau':tau, 'mu':mu, 'cov':cov, 'q_meas':q_meas,
-               'mu_next':mu_next_corr, 'cov_next':cov_next_corr, 'y_hat': y_hat, 'S_hat': S_hat,
-               'likelihood': likelihood}
+               'mu_next':mu_next_corr, 'cov_next':cov_next_corr, 'y_hat': y_hat, 'S_hat': S_hat}
     
     step_fn = ca.Function('ekf_step', fn_dict,
                           ['tau', 'mu', 'cov', 'q_meas'], # inputs to casadi function
-                          ['mu_next', 'cov_next', 'S_hat', 'y_hat', 'likelihood'])        # outputs of casadi function
+                          ['mu_next', 'cov_next', 'S_hat', 'y_hat'])        # outputs of casadi function
     return step_fn
 
 class ekf():

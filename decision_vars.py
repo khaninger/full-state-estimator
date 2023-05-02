@@ -8,14 +8,18 @@ import numpy as np
 from sys import version_info
 from copy import deepcopy
 
-class DecisionVar():
+class decision_var:
     """
     Individual optimization variable, initialized from an initial value x0.
     Upper/lower bounds ub/lb default to +/- np.inf unless overwritten
     """
     def __init__(self, x0, lb = -np.inf, ub = np.inf, x = None):
-        x0 = np.array(x0)
-        self.size  = x0.size
+        if type(x0) == ca.SX or type(x0) == ca.MX:
+            self.x = x0
+            self.size = np.prod(x0.shape)
+        else:
+            x0 = np.array(x0)
+            self.size  = x0.size
 
         self.x0 = x0
         self.shape = self.x0.shape
@@ -23,10 +27,13 @@ class DecisionVar():
         self.ub = np.full(self.shape, ub)
         self.x = x
 
+#        assert np.all(x0 >= self.lb), "x0 below given lower bound"
+#        assert np.all(x0 <= self.ub), "x0 above given upper bound"
+
     def __len__(self):
         return self.size
 
-class DecisionVarSet():
+class decision_var_set:
     """
     Helper class for sets of decision variables.
 
@@ -51,9 +58,9 @@ class DecisionVarSet():
         self.__optimized = False  # Flag if set_results has been called
 
         for key in x0.keys():
-            self[key] = DecisionVar(x0[key],
-                                    lb = lb.get(key, -np.inf),
-                                    ub = ub.get(key, np.inf))
+            self[key] = decision_var(x0[key],
+                                     lb = lb.get(key, -np.inf),
+                                     ub = ub.get(key, np.inf))
 
     def __setitem__(self, key, value):
         """
@@ -140,6 +147,51 @@ class DecisionVarSet():
             self.__vars[key].x = np.squeeze(ca.reshape(x_opt[read_pos:read_pos+v_size], *v_shape))
             read_pos += v_size
         self.__optimized = True
+
+class param_set:
+    """
+    Helper class for parameters. Simple dictionary which vectorizes
+    """
+    def __init__(self, p = {}, symb_type = None):
+        assert version_info >= (3, 6), "Python 3.6 required to guarantee dicts are ordered"
+        self.__vars = {}   # Dictionary for holding variables
+        self.__keys = []   # List of elements
+        self.__symb_type = symb_type
+
+        for key in p.keys():
+            self[key] = p[key]
+
+    def __setitem__(self, key, value):
+        """
+        # Arguments:
+            key: name of variable
+            value: parameter which should be set there
+        """
+        value = np.asarray(value, float)
+        if self.__symb_type:         # Symbolic parameters
+            self.__vars[key]  = self.__symb_type(key, *value.shape)
+        else:
+            self.__vars[key] = value
+        self.__keys = list(self.__vars.keys())
+
+    def __getitem__(self, key):
+        """
+        Return parameter
+        """
+        if not key in self.__vars: return None
+        return self.__vars[key]
+
+    def __len__(self):
+        return sum(len(val) for val in self.__vars.values())
+
+    def __str__(self):
+        s = "** Parameter **\n"
+        for key in self.__keys:
+            s += "{}:\n: {}\n".format(key, self[key])
+        return s
+
+    def get_vector(self):
+        return vectorize(self.__vars)
 
 def vectorize(dic):
     return ca.vertcat(*[ca.reshape(el, int(np.prod(el.shape)),1) for el in dic.values()])

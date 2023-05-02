@@ -22,17 +22,10 @@ def build_step_fn(robot):
     y_hat = C@mu
     S_hat = C@cov_next@(C.T) + meas_noise
     temp1 = ca.det(S_hat)**(-1/2)
-<<<<<<< HEAD
-    temp2 = ca.exp(-0.5*(q_meas-y_hat).transpose @ ca.inv(S_hat) @ (q_meas-y_hat))
-    mu_next_corr = mu_next + L@(q_meas - mu_next[:robot.nq])
-    cov_next_corr = (ca.SX.eye(robot.nx)-L@C)@cov_next # corrected covariance
-    likelihood = (2 * np.pi) ** (-N/2) * temp1 * temp2
-=======
     temp2 = ca.exp(-0.5*ca.transpose(q_meas-y_hat) @ ca.inv(S_hat) @ (q_meas-y_hat))
     mu_next_corr = mu_next + L@(q_meas - mu_next[:robot.nq])
     cov_next_corr = (ca.SX.eye(robot.nx)-L@C)@cov_next # corrected covariance
     likelihood = (2*np.pi)**(-N/2)*temp1*temp2
->>>>>>> dafb85ca37f683c7ac946c741c88b08f50fe3546
     fn_dict = {'tau':tau, 'mu':mu, 'cov':cov, 'q_meas':q_meas,
                'mu_next':mu_next_corr, 'cov_next':cov_next_corr, 'y_hat': y_hat, 'S_hat': S_hat,
                'likelihood': likelihood}
