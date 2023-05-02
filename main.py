@@ -74,7 +74,7 @@ class ros_observer():
         self.f_ee_mo_pub  = rospy.Publisher('force_ee_mo',  JointState, queue_size=1)
 
         #self.params = init_rosparams()
-        self.params = RobotDict(["config_files/contact.yaml", "config_files/free_space.yaml"], est_pars).param_dict
+        self.params = RobotDict("config_files/franka.yaml", ["config_files/contact.yaml", "config_files/free_space.yaml"], est_pars).param_dict
 
         #self.robot = Robot(self.params, est_pars = est_pars)
         #self.observer = ekf(self.robot)
@@ -134,7 +134,7 @@ def generate_traj(bag, est_pars = {}):
 
     #robot = Robot(p, est_pars = est_pars)
     #observer = ekf(robot)
-    params = RobotDict(["config_files/contact.yaml", "config_files/free_space.yaml"], est_pars).param_dict
+    params = RobotDict("config_files/franka.yaml", ["config_files/contact.yaml", "config_files/free_space.yaml"], est_pars).param_dict
     observer = HybridParticleFilter(params)
     num_msgs = len(msgs['pos'].T)
 

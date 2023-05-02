@@ -378,8 +378,10 @@ joint_names:
   - wrist_1_joint
   - wrist_2_joint
   - wrist_3_joint
+  - last_joint
 fric_model:
   visc:
+    - 0.4
     - 0.4
     - 0.4
     - 0.4
@@ -395,7 +397,9 @@ proc_noise:
     - 1e-2
     - 1e-2
     - 1e-2
+    - 1e-2
   dq:
+    - 1e5
     - 1e5
     - 1e5
     - 1e5
@@ -418,7 +422,9 @@ cov_init:
     - 1e-2
     - 1e-2
     - 1e-2
+    - 1e-2
   dq:
+    - 1e5
     - 1e5
     - 1e5
     - 1e5
@@ -441,6 +447,7 @@ meas_noise:
     - 1e-1
     - 1e-1
     - 1e-1
+    - 1e-1
 q0:
   - 2.29
   - -1.02
@@ -448,3 +455,4 @@ q0:
   - -2.87
   - 1.55
   - 0.56
+  - 0.63

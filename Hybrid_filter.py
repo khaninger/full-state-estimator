@@ -57,11 +57,7 @@ class HybridParticleFilter:
             particle.mode = np.matmul(particle.mode_prev, self.trans_matrix)
             particle.sampled_mode = np.random.choice(self.modes_lst, p=particle.mode)
             particle.mu, particle.Sigma, self.S_t[i], self.y_hat[i], particle.weight = self.step_fn[particle.sampled_mode](tau, particle.mu_prev, particle.Sigma_prev, q)
-<<<<<<< HEAD
-            
-=======
-            #print(particle.weight.size)
->>>>>>> dafb85ca37f683c7ac946c741c88b08f50fe3546
+
             particle.mu_prev = particle.mu
             particle.Sigma_prev = particle.Sigma
             #print(particle.Sigma.shape)
@@ -162,25 +158,12 @@ class HybridParticleFilter:
         return {}
 
     def step(self, q, tau, F=None):
-<<<<<<< HEAD
 
-        self.propagate(q, tau, F=None)
-        self.calc_weights(q)
-        if self.N_eff < self.num_particles/4:
-            self.MultinomialResample()
-
-        self.estimate_state()
-
-
-
-=======
         self.propagate(q, tau, F=None)
         self.calc_weights(q)
         if self.N_eff < self.num_particles/5:
             self.StratifiedResampling()
         self.estimate_state()
-
->>>>>>> dafb85ca37f683c7ac946c741c88b08f50fe3546
         return self.x, self.belief_free, self.belief_contact
 
 class Particle:

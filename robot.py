@@ -153,14 +153,26 @@ class RobotDict():
 
     """
 
-    def __init__(self, file_path=None, est_par={}):
+    def __init__(self, robot_path=None, file_path=None, est_par={}):
         """
-        file_path: list of file_paths associated to different configuration files.
+        file_path: list of file_paths associated to different contact models parameters.
+        robot_path: path of robot configuration file
 
         """
+        self.robot_param_dict = {}
+        if robot_path:
+            self.create_robot_dict(robot_path)
         self.param_dict = {}
         if file_path:
             self.load_robot_models(file_path, est_par)
+
+    def create_robot_dict(self, robot_path):
+        robot_file = open(robot_path, 'r')
+        robot_content = ruamel.yaml.load(robot_file, Loader=ruamel.yaml.Loader)
+        local_list = []
+        for key, value in robot_content.items():
+            local_list.append((key, value))
+        self.robot_param_dict = dict(local_list)
 
     def yaml_load(self, path):
         yaml_file = open(path, 'r')
@@ -171,7 +183,7 @@ class RobotDict():
                 value = ca.DM(value)
             local_list.append((key, value))
         final_dict = dict(local_list)
-        final_dict.update(robot_model_dict)
+        final_dict.update(self.robot_param_dict)
         model_name = final_dict['model']
         return model_name, final_dict
 
