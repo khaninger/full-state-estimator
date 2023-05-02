@@ -132,7 +132,7 @@ def generate_traj(bag, est_pars = {}):
 
     #robot = Robot(p, est_pars = est_pars)
     #observer = ekf(robot)
-    params = RobotDict(["config_files/contact.yaml", "config_files/free_space.yaml"], est_pars)
+    params = RobotDict(["config_files/contact.yaml", "config_files/free_space.yaml"], est_pars).param_dict
     observer = HybridParticleFilter(params)
     num_msgs = len(msgs['pos'].T)
 
