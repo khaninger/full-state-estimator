@@ -107,14 +107,14 @@ class HybridParticleFilter:
         for i, particle in enumerate(self.particles):
             #print(pos[i, :])
             #print(particle.mu[:6].shape)
-            pos[i,:] = particle.mu[:6]
+            pos[i,:] = particle.mu[:self.nq]
             #print(particle.weight)
             weights[i] = particle.weight
-            vel[i,:] = particle.mu[-6:]
+            vel[i,:] = particle.mu[-self.nq:]
             cov[i] = particle.Sigma
         #print(weights.shape)
-        self.x['mu'][:6] = np.average(pos, weights=weights, axis=0)
-        self.x["mu"][-6:] = np.average(vel, weights=weights, axis=0)
+        self.x['mu'][:self.nq] = np.average(pos, weights=weights, axis=0)
+        self.x["mu"][-self.nq:] = np.average(vel, weights=weights, axis=0)
         self.x["cov"] = np.average(cov, weights=weights, axis=0)
         #print(self.x["cov"].shape)
 

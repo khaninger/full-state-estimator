@@ -9,9 +9,12 @@ p['gearratio'] = np.array(rospy.get_param('gearratio', [101, 101, 101, 54, 54, 5
 p['torque_constant'] = np.array(rospy.get_param('torque_constant',
                                                     [0.11968, 0.11968, 0.098322,
                                                      0.10756, 0.10756, 0.10756 ]))
-p['names'] =  ['shoulder_pan_joint', 'shoulder_lift_joint',
+p['names'] = ['shoulder_pan_joint', 'shoulder_lift_joint',
                'elbow_joint', 'wrist_1_joint',
                'wrist_2_joint', 'wrist_3_joint']
+p['names_franka'] = ['panda_joint1', 'panda_joint2',
+               'panda_joint3', 'panda_joint4',
+               'panda_joint5', 'panda_joint6', 'panda_joint7']
 
 def build_jt_msg(q, dq = [], tau = []):
     msg = JointState()
@@ -74,6 +77,20 @@ def map_ur_joint_state(msg):
     motor_torque = current*p['torque_constant']
     tau = motor_torque*p['gearratio']
     return q, v, tau
+
+def map_franka_joint_state(msg):
+    q = []
+    v = []
+    tau = []
+    for jt_name in p['names_franka']:
+        ind = msg.name.index(jt_name)
+        q.append(msg.position[ind])
+        v.append(msg.velocity[ind])
+        tau.append(msg.effort[ind])
+
+
+    return q, v, tau
+
 
 def get_aligned_msgs(msgs1, msgs2):
     ''' 

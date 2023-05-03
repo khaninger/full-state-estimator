@@ -83,14 +83,16 @@ class ros_observer():
     def joint_callback(self, msg):
         """ To be called when the joint_state topic is published with joint position and torques """
         try:
-            q, _, current = map_ur_joint_state(msg)
+            q, _, tau = map_franka_joint_state(msg)
             self.q = np.array(q)
+            self.tau = np.array(tau)
 
         except:
             print("Error loading ROS message in joint_callback")
         if hasattr(self, 'observer'):
             self.observer_update()
-            self.publish_state()
+            print(self.x)
+            #self.publish_state()
 
     def force_callback(self, msg):
         try:
@@ -105,7 +107,7 @@ class ros_observer():
                                     F = self.F)[0]
 
     def publish_state(self):
-        ddq = self.x.get('ddq', np.zeros(self.observer.dyn_sys.nq))
+        ddq = self.x.get('ddq', np.zeros(self.observer.nq))
         msg = build_jt_msg(self.x['q'], self.x['dq'],
                            np.concatenate((self.x.get('stiff',[]), self.x.get('cont_pt', []))))
         msg_f = build_jt_msg(q = self.x['f_ee_mo'], dq = self.x['f_ee_obs'], tau = self.F) 

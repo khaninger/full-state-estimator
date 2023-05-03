@@ -45,8 +45,24 @@ class Robot():
         self.data = self.model.createData()
         self.cmodel = cpin.Model(self.model)
         self.cdata = self.cmodel.createData()
-        kindyn = pycasadi_kin_dyn.CasadiKinDyn(urdf)
-        self.fwd_kin  = ca.Function.deserialize(kindyn.fk('tool0'))
+        #kindyn = pycasadi_kin_dyn.CasadiKinDyn(urdf)
+        #self.fwd_kin  = ca.Function.deserialize(kindyn.fk('fr3_link7')) #tool0 with UR
+        q = ca.SX.sym('q', 7)
+        v = ca.SX.sym('v', 7)
+        a = ca.SX.sym('a', 7)
+        cpin.forwardKinematics(self.cmodel, self.cdata, q, v, a)
+        cpin.updateFramePlacement(self.cmodel, self.cdata, self.cmodel.getFrameId('fr3_link7'))
+        #print(fwd_kin)
+        #for name, oMF in zip(self.cmodel.names, self.cdata.oMf):
+            #print(name)
+            #print(oMF)
+        #print(self.cdata.oMf.keys())
+        #print(self.cmodel.getFrameId('fr3_link7')))
+        ee = self.cdata.oMf[self.cmodel.getFrameId('fr3_link8')]
+        print(type(ee))
+        #print(ee.rotation)
+        self.fwd_kin =  ca.Function('p',[q],[ee.translation, ee.rotation])
+        print(self.fwd_kin(np.ones(7)))
         self.nq = self.model.nq
 
     def build_vars(self, par, opt_pars, est_pars):
@@ -100,7 +116,7 @@ class Robot():
         B = ca.diag(self.fric_model['visc'])
         tau_err = tau - cpin.computeGeneralizedGravity(self.cmodel, self.cdata, q)
 
-        M = cpin.crba(self.cmodel, self.cdata, q)+ca.diag(np.array([0.5, 0.5, 0.5, 0.25, 0.25, 0.25]))
+        M = cpin.crba(self.cmodel, self.cdata, q)+ca.diag(0.5*np.ones(self.nq))
         Mtilde_inv = ca.inv(M+h*B)
 
         tau_i = self.contact.get_contact_torque(q)
