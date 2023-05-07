@@ -153,7 +153,7 @@ class Robot():
 
         self.C =  np.hstack((np.eye(self.nq), np.zeros((self.nq, self.nx-self.nq))))
         
-    def get_tcp_motion(self, q, dq, ddq):
+    def get_tcp_motion(self, q, dq):
         x = self.fwd_kin(q)
         dx = self.d_fwd_kin(q, dq)
         return x, dx

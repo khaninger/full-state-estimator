@@ -24,12 +24,14 @@ class HybridParticleFilter:
         self.particles = []
         self.num_particles = 20
         self.trans_matrix = np.array([[0.8, 0.2], [0.2, 0.8]])
-        self.belief_init = np.array([0.8, 0.2])
-        self.belief_free = 0.8
-        self.belief_contact = 0.2
+        #self.belief_init = np.array([0.8, 0.2])
+        #self.belief_free = 0.8
+        #self.belief_contact = 0.2
         #self.robot_dict = robot.param_dict
         self.N_eff = 0
-        self.x = {'mu': robot['free-space'].xi_init, 'cov': robot['free-space'].cov_init}
+        self.x = {'mu': robot['free-space'].xi_init, 'cov': robot['free-space'].cov_init,
+                  'belief_free': 0.8, 'belief_contact': 0.2}
+        self.belief_init = np.array([self.x['belief_free'], self.x['belief_contact']])
         #print(self.x['mu'])
         self.proc_noise = robot['free-space'].proc_noise
         self.meas_noise = robot['free-space'].meas_noise
@@ -65,7 +67,7 @@ class HybridParticleFilter:
 
 
 
-    def calc_weights(self, q):
+    def calc_weights(self):
         summation = 0
         for i, particle in enumerate(self.particles):
             #print(self.y_hat[i].shape)
@@ -85,11 +87,11 @@ class HybridParticleFilter:
             #print(particle.weight)
             self.weightsum += particle.weight**2
         self.N_eff = 1/self.weightsum  # effective number of particles, needed for resampling step
-        self.belief_free = sum([particle.weight for particle in self.particles if particle.sampled_mode == 'free-space'])
-        self.belief_contact = sum([particle.weight for particle in self.particles if particle.sampled_mode == 'contact'])
+        self.x['belief_free'] = sum([particle.weight for particle in self.particles if particle.sampled_mode == 'free-space'])
+        self.x['belief_contact'] = sum([particle.weight for particle in self.particles if particle.sampled_mode == 'contact'])
         #print(self.belief_contact)
         for particle in self.particles:
-            particle.mode_prev = np.array([self.belief_free, self.belief_contact])
+            particle.mode_prev = np.array([self.x['belief_free'], self.x['belief_contact']])
 
 
     def estimate_state(self):
@@ -164,7 +166,7 @@ class HybridParticleFilter:
         if self.N_eff < self.num_particles/5:
             self.StratifiedResampling()
         self.estimate_state()
-        return self.x, self.belief_free, self.belief_contact
+        return self.x
 
 class Particle:
     def __init__(self, mode_0, mu_0, P0, weight0, sampled_mode0):

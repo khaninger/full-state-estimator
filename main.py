@@ -70,11 +70,14 @@ class ros_observer():
                                          JointState, queue_size=1)
         self.ee_pub = rospy.Publisher('observer_ee',
                                       JointState, queue_size=1)
-        self.f_ee_obs_pub = rospy.Publisher('force_ee_obs', JointState, queue_size=1)
-        self.f_ee_mo_pub  = rospy.Publisher('force_ee_mo',  JointState, queue_size=1)
+        #self.f_ee_obs_pub = rospy.Publisher('force_ee_obs', JointState, queue_size=1)
+        #self.f_ee_mo_pub  = rospy.Publisher('force_ee_mo',  JointState, queue_size=1)
 
         #self.params = init_rosparams()
         self.params = RobotDict("config_files/franka.yaml", ["config_files/contact.yaml", "config_files/free_space.yaml"], est_pars).param_dict
+        self.ny = self.params['free-space'].ny
+        self.nq = self.params['free-space'].nq
+        self.nx = self.params['free-space'].nx
 
         #self.robot = Robot(self.params, est_pars = est_pars)
         #self.observer = ekf(self.robot)
@@ -91,12 +94,12 @@ class ros_observer():
             print("Error loading ROS message in joint_callback")
         if hasattr(self, 'observer'):
             self.observer_update()
-            print(self.x)
-            #self.publish_state()
+            #print(self.x)
+            self.publish_state()
 
     def force_callback(self, msg):
         try:
-            self.F =  np.vstack((msg.wrench.force.x,  msg.wrench.force.y,  msg.wrench.force.z,
+            self.F = np.vstack((msg.wrench.force.x,  msg.wrench.force.y,  msg.wrench.force.z,
                                  msg.wrench.torque.x, msg.wrench.torque.y, msg.wrench.torque.z))
         except:
             print("Error loading ROS message in force_callback")
@@ -104,16 +107,20 @@ class ros_observer():
     def observer_update(self):
         self.x = self.observer.step(q = self.q,
                                     tau = self.tau,
-                                    F = self.F)[0]
+                                    F = self.F)
 
     def publish_state(self):
-        ddq = self.x.get('ddq', np.zeros(self.observer.nq))
-        msg = build_jt_msg(self.x['q'], self.x['dq'],
-                           np.concatenate((self.x.get('stiff',[]), self.x.get('cont_pt', []))))
-        msg_f = build_jt_msg(q = self.x['f_ee_mo'], dq = self.x['f_ee_obs'], tau = self.F) 
+        #ddq = self.x.get('ddq', np.zeros(self.observer.nq))
+        #msg = build_jt_msg(self.x['q'], self.x['dq'],
+                           #np.concatenate((self.x.get('stiff',[]), self.x.get('cont_pt', []))))
+        msg = build_jt_msg(self.x['mu'][:self.nq], self.x['mu'][-self.nq:])
+        x, dx = self.params['free-space'].get_tcp_motion(self.x['mu'][:self.nq], self.x['mu'][-self.nq:])
+        msg_ee = build_jt_msg((x[0].full(), dx.full()))
+        #msg_f = build_jt_msg(q = self.x['f_ee_mo'], dq = self.x['f_ee_obs'], tau = self.F)
         if not rospy.is_shutdown():
             self.joint_pub.publish(msg)
-            self.f_ee_obs_pub.publish(msg_f)
+            self.ee_pub.publish(msg_ee)
+            #self.f_ee_obs_pub.publish(msg_f)
         #x, dx, ddx = self.observer.dyn_sys.get_tcp_motion(self.x['q'], self.x['dq'], ddq)
         #msg_ee = build_jt_msg(x[0].full(), dx.full(), ddx.full())
         #if not rospy.is_shutdown():
