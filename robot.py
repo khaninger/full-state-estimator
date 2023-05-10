@@ -1,4 +1,5 @@
 import pinocchio as pin
+
 import pinocchio.casadi as cpin
 import numpy as np
 import casadi as ca
