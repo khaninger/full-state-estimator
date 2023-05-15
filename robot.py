@@ -11,10 +11,11 @@ class Robot():
     """ This class handles the loading of robot dynamics/kinematics, the discretization/integration, and linearization
         This class should be stateless (e.g. the actual system state shouldn't be stored here).
     """
-    def __init__(self, par, opt_pars = {}, est_pars = {}):
+    def __init__(self, par, opt_pars = {}, est_pars = {}, flag=False):
         """ IN: par is the complete parameter dictionary
             IN: opt_par is a dict, containing the sym vars directly
             IN: est_par is a dict, key is contact name, value is list of params
+            IN: flag is just for distinguishing between different observation matrices
         """
         print("Building robot model with:")
         print("  contact model(s):  {}".format(par['contact_models']))
@@ -25,13 +26,14 @@ class Robot():
         self.jit_options = {}#{'jit':True, 'compiler':'shell', "jit_options":{"compiler":"gcc", "flags": ["-Ofast"]}}
 
         self.contact = Contact()
-                
+        self.new_obsMatrix = flag
         self.load_kin_dyn(par['urdf'], par['urdf_path'])
         self.build_vars(par, opt_pars, est_pars)
 
         self.fric_model = par['fric_model']
 
         self.build_disc_dyn(par['h'], opt_pars)
+
 
     def get_statedict(self, xi):
         # Maps from a vector xi to a state dictionary
@@ -148,19 +150,29 @@ class Robot():
         A[nq:nq2, nq2:] += h*ddelta_dp
         
         #A = ca.jacobian(self.vars['xi_next'], self.vars['xi'])
+        C = ca.jacobian(tau_i, self.vars['xi'])
         fn_dict['A'] = A
         self.A =  ca.Function('A', {k:fn_dict[k] for k in ('A', 'xi', 'tau', *opt_pars.keys())},
                                  ['xi', 'tau',  *opt_pars.keys()],['A'], self.jit_options).expand()
 
-        self.C =  np.hstack((np.eye(self.nq), np.zeros((self.nq, self.nx-self.nq))))
-        
+        self.C_positions = np.hstack((np.eye(self.nq), np.zeros((self.nq, self.nx-self.nq))))   # previous constant observation matrix with only joint positions
+        C_new = ca.vertcat(self.C_positions, C)  # build new observation matrix with joint positions and torques
+        fn_dict['C'] = C_new  # add new tuple to the dictionary for new state dependent observation matrix
+        self.C_torques = ca.Function('C', {k: fn_dict[k] for k in ('A', 'xi',  *opt_pars.keys())},
+                             ['xi', *opt_pars.keys()], ['C'], self.jit_options).expand()  # build new casadi function for new observation matrix
+
+
     def get_tcp_motion(self, q, dq):
         x = self.fwd_kin(q)
         dx = self.d_fwd_kin(q, dq)
         return x, dx
 
     def get_linearized(self, state):
-        return self.A.call(state)['A'], self.C
+        if self.new_obsMatrix:
+            return self.A.call(state)['A'], self.C_torques.call(state)['C']
+        else:
+            return self.A.call(state)['A'], self.C_positions
+
 
 
 class RobotDict():
