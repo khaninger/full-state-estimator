@@ -110,7 +110,7 @@ class decision_var_set:
         return ca.vertcat(*[getattr(el, attr).reshape((el.size,1)) for el in self.__vars.values()])
 
     def get_elem_vector(self, key):
-        return ca.vertcat(self.__vars[key].x.reshape((self.__vars[key].size,1)))
+        return ca.vertcat(self.__vars[key].x.reshape((self.__vars[key].size,)))
 
     def get_dec_vectors(self):
         """
