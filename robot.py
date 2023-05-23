@@ -150,16 +150,16 @@ class Robot():
         A[nq:nq2, nq2:] += h*ddelta_dp
         
         #A = ca.jacobian(self.vars['xi_next'], self.vars['xi'])
-        #C = ca.jacobian(tau_i, self.vars['xi'])
+        C = ca.jacobian(tau_i, self.vars['xi'])
         fn_dict['A'] = A
         self.A =  ca.Function('A', {k:fn_dict[k] for k in ('A', 'xi', 'tau', *opt_pars.keys())},
                                  ['xi', 'tau',  *opt_pars.keys()],['A'], self.jit_options).expand()
 
-        self.C = np.hstack((np.eye(self.nq), np.zeros((self.nq, self.nx-self.nq))))   # previous constant observation matrix with only joint positions
-        #C_new = ca.vertcat(self.C_positions, C)  # build new observation matrix with joint positions and torques
-        #fn_dict['C'] = C_new  # add new tuple to the dictionary for new state dependent observation matrix
-        #self.C_torques = ca.Function('C', {k: fn_dict[k] for k in ('C', 'xi',  *opt_pars.keys())},
-                             #['xi', *opt_pars.keys()], ['C'], self.jit_options).expand()  # build new casadi function for new observation matrix
+        self.C_positions = np.hstack((np.eye(self.nq), np.zeros((self.nq, self.nx-self.nq))))   # previous constant observation matrix with only joint positions
+        C_new = ca.vertcat(self.C_positions, C)  # build new observation matrix with joint positions and torques
+        fn_dict['C'] = C_new  # add new tuple to the dictionary for new state dependent observation matrix
+        self.C_torques = ca.Function('C', {k: fn_dict[k] for k in ('C', 'xi',  *opt_pars.keys())},
+                             ['xi', *opt_pars.keys()], ['C'], self.jit_options).expand()  # build new casadi function for new observation matrix
 
 
     def get_tcp_motion(self, q, dq):
@@ -168,11 +168,10 @@ class Robot():
         return x, dx
 
     def get_linearized(self, state):
-        """if self.new_obsMatrix:
+        if self.new_obsMatrix:
             return self.A.call(state)['A'], self.C_torques.call(state)['C']
         else:
-        """
-        return self.A.call(state)['A'], self.C
+            return self.A.call(state)['A'], self.C_positions
 
 
 

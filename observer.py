@@ -9,26 +9,28 @@ def build_step_fn(robot):
     proc_noise = robot.proc_noise
     meas_noise = robot.meas_noise
 
-    tau = robot.vars['tau']
+    #tau = robot.vars['tau']
     mu = robot.vars['xi']
     mu_next = robot.vars['xi_next']
-    A, C = robot.get_linearized({'tau':tau, 'xi':mu})
+    A, C = robot.get_linearized({'tau':ca.SX(robot.nq), 'xi':mu})
     N = robot.nq
-    q_meas = ca.SX.sym('q_meas', robot.nq)
+    q_meas = ca.SX.sym('q_meas', robot.nq)  # joint positions measurements
+    tau_meas = ca.SX.sym('tau_meas', robot.nq)  # joint torques measurements
+    z_meas = ca.vertcat(q_meas, tau_meas)  # stacked vector of measurements
     cov = ca.SX.sym('cov', mu.shape[0], mu.shape[0])
     
     cov_next = A@cov@(A.T) + proc_noise
-    L = cov_next@C.T@ca.inv(C@cov_next@(C.T) + meas_noise) # calculate Kalman gain
+    L = cov_next@C.T@ca.inv(C@cov_next@(C.T) + meas_noise)  # calculate Kalman gain
     y_hat = C@mu
     S_hat = C@cov_next@(C.T) + meas_noise
     temp1 = ca.det(S_hat)**(-1/2)
 
-    temp2 = ca.exp(-0.5*ca.transpose(q_meas-y_hat) @ ca.inv(S_hat) @ (q_meas-y_hat))
+    temp2 = ca.exp(-0.5*ca.transpose(z_meas-y_hat) @ ca.inv(S_hat) @ (z_meas-y_hat))
     mu_next_corr = mu_next + L@(q_meas - mu_next[:robot.nq])
     cov_next_corr = (ca.SX.eye(robot.nx)-L@C)@cov_next # corrected covariance
     likelihood = (2*np.pi)**(-N/2)*temp1*temp2
 
-    fn_dict = {'tau':tau, 'mu':mu, 'cov':cov, 'q_meas':q_meas,
+    fn_dict = {'tau':tau_meas, 'mu':mu, 'cov':cov, 'q_meas':q_meas,
                'mu_next':mu_next_corr, 'cov_next':cov_next_corr, 'y_hat': y_hat, 'S_hat': S_hat,
                'likelihood': likelihood}
     
