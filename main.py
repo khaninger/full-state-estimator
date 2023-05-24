@@ -89,12 +89,14 @@ class ros_observer():
             q, _, tau = map_franka_joint_state(msg)
             self.q = np.array(q)
             self.tau = np.array(tau)
-
         except:
             print("Error loading ROS message in joint_callback")
+
         if hasattr(self, 'observer'):
+            print("Before update")
             self.observer_update()
-            #print(self.x)
+            print('after update')
+            #print(self.x['mu'])
             self.publish_state()
 
     def force_callback(self, msg):
@@ -132,6 +134,7 @@ def start_node(est_pars):
     rospy.init_node('observer')
     node = ros_observer(est_pars=est_pars)
     rospy.on_shutdown(node.shutdown)  # Set shutdown to be executed when ROS exits
+    #print("Spinning observer")
     rospy.spin()
 
 def generate_traj(bag, est_pars = {}):

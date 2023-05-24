@@ -11,7 +11,7 @@ class Robot():
     """ This class handles the loading of robot dynamics/kinematics, the discretization/integration, and linearization
         This class should be stateless (e.g. the actual system state shouldn't be stored here).
     """
-    def __init__(self, par, opt_pars = {}, est_pars = {}, flag=False):
+    def __init__(self, par, opt_pars = {}, est_pars = {}, flag=True):
         """ IN: par is the complete parameter dictionary
             IN: opt_par is a dict, containing the sym vars directly
             IN: est_par is a dict, key is contact name, value is list of params
@@ -89,7 +89,7 @@ class Robot():
         self.xi_init = ca.vertcat(*xi_init)
         self.cov_init = ca.diag(ca.vertcat(*cov_init_vec))
         self.proc_noise = ca.diag(ca.vertcat(*proc_noise_vec))
-        self.meas_noise = ca.diag(par['meas_noise']['pos'])
+        self.meas_noise = ca.diag(ca.vertcat(par['meas_noise']['pos'], par['meas_noise']['torques']))
 
         self.nx = 2*self.nq+self.contact.np
         self.ny = self.nq
@@ -115,28 +115,33 @@ class Robot():
         nq2 = 2*self.nq
         q = self.vars['q']
         dq = self.vars['dq']
-        tau = self.vars['tau']
+        #tau = self.vars['tau']
         B = ca.diag(self.fric_model['visc'])
-        tau_err = tau - cpin.computeGeneralizedGravity(self.cmodel, self.cdata, q)
+        #tau_err = tau - cpin.computeGeneralizedGravity(self.cmodel, self.cdata, q)
+        tau_err = - cpin.computeGeneralizedGravity(self.cmodel, self.cdata, q)
+
 
         M = cpin.crba(self.cmodel, self.cdata, q)+ca.diag(0.5*np.ones(self.nq))
         Mtilde_inv = ca.inv(M+h*B)
 
-        tau_i = self.contact.get_contact_torque(q)
+        tau_i = self.contact.get_contact_torque(q)  # get total estimated contact torque
+        self.vars['tau_i'] = tau_i  # make contact torque an independent variable
 
         delta = Mtilde_inv@(-B@dq + tau_err + tau_i)
-        fn_dict = {'xi':self.vars['xi'],
-                   'tau':tau}
+        fn_dict = {'xi': self.vars['xi']}
+
         fn_dict.update(opt_pars)
 
         dq_next= dq + h*delta
         q_next = q + h*dq_next
         fn_dict['xi_next'] = ca.vertcat(q_next, dq_next, fn_dict['xi'][nq2:])
-        self.vars['xi_next'] = fn_dict['xi_next']       
-        self.disc_dyn =  ca.Function('disc_dyn', fn_dict,
-                                     ['xi', 'tau', *opt_pars.keys()],
+        self.vars['xi_next'] = fn_dict['xi_next']
+        #print(self.vars['xi_next'].shape)
+        #print(M.shape)
+        self.disc_dyn = ca.Function('disc_dyn', fn_dict,
+                                     ['xi', *opt_pars.keys()],
                                      ['xi_next'], self.jit_options).expand()    
-        
+        #print(self.disc_dyn)
         ddelta_dq = Mtilde_inv@ca.jacobian(tau_i, q) #ignoring derivative of Mtilde_inv wrt q, ~5x speedup
         ddelta_ddq = -Mtilde_inv@B
         ddelta_dp = Mtilde_inv@ca.jacobian(tau_i, self.vars['xi'][nq2:]) #ignoring derivative of Mtilde_inv wrt q, ~5x speedup
@@ -152,15 +157,15 @@ class Robot():
         #A = ca.jacobian(self.vars['xi_next'], self.vars['xi'])
         C = ca.jacobian(tau_i, self.vars['xi'])
         fn_dict['A'] = A
-        self.A =  ca.Function('A', {k:fn_dict[k] for k in ('A', 'xi', 'tau', *opt_pars.keys())},
-                                 ['xi', 'tau',  *opt_pars.keys()],['A'], self.jit_options).expand()
-
+        self.A =  ca.Function('A', {k:fn_dict[k] for k in ('A', 'xi', *opt_pars.keys())},
+                                 ['xi', *opt_pars.keys()],['A'], self.jit_options).expand()
+        #print(self.A)
         self.C_positions = np.hstack((np.eye(self.nq), np.zeros((self.nq, self.nx-self.nq))))   # previous constant observation matrix with only joint positions
         C_new = ca.vertcat(self.C_positions, C)  # build new observation matrix with joint positions and torques
         fn_dict['C'] = C_new  # add new tuple to the dictionary for new state dependent observation matrix
-        self.C_torques = ca.Function('C', {k: fn_dict[k] for k in ('C', 'xi',  *opt_pars.keys())},
+        self.C_torques = ca.Function('C', {k: fn_dict[k] for k in ('C', 'xi', *opt_pars.keys())},
                              ['xi', *opt_pars.keys()], ['C'], self.jit_options).expand()  # build new casadi function for new observation matrix
-
+        #print(self.A.call({'xi': self.vars['xi']})['A'].shape)
 
     def get_tcp_motion(self, q, dq):
         x = self.fwd_kin(q)

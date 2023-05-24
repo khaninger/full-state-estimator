@@ -12,31 +12,36 @@ def build_step_fn(robot):
     #tau = robot.vars['tau']
     mu = robot.vars['xi']
     mu_next = robot.vars['xi_next']
-    A, C = robot.get_linearized({'tau':ca.SX(robot.nq), 'xi':mu})
+    tau_i = robot.vars['tau_i']  # expected contact torque
+    A, C = robot.get_linearized({'xi': mu})  # get linearized state and observation matrices wrt state
     N = robot.nq
     q_meas = ca.SX.sym('q_meas', robot.nq)  # joint positions measurements
     tau_meas = ca.SX.sym('tau_meas', robot.nq)  # joint torques measurements
     z_meas = ca.vertcat(q_meas, tau_meas)  # stacked vector of measurements
     cov = ca.SX.sym('cov', mu.shape[0], mu.shape[0])
-    
+
     cov_next = A@cov@(A.T) + proc_noise
     L = cov_next@C.T@ca.inv(C@cov_next@(C.T) + meas_noise)  # calculate Kalman gain
-    y_hat = C@mu
+    #print(L.shape)
+    #y_hat = C@mu
     S_hat = C@cov_next@(C.T) + meas_noise
     temp1 = ca.det(S_hat)**(-1/2)
-
-    temp2 = ca.exp(-0.5*ca.transpose(z_meas-y_hat) @ ca.inv(S_hat) @ (z_meas-y_hat))
-    mu_next_corr = mu_next + L@(q_meas - mu_next[:robot.nq])
+    y_t = ca.vertcat(mu_next[:robot.nq], tau_i)  # nonlinear predicted measurements
+    #print(mu_next)
+    temp2 = ca.exp(-0.5*ca.transpose(z_meas-y_t) @ ca.inv(S_hat) @ (z_meas-y_t))
+    mu_next_corr = mu_next + L@(z_meas - y_t)
     cov_next_corr = (ca.SX.eye(robot.nx)-L@C)@cov_next # corrected covariance
     likelihood = (2*np.pi)**(-N/2)*temp1*temp2
-
+    #print(likelihood.shape)
     fn_dict = {'tau':tau_meas, 'mu':mu, 'cov':cov, 'q_meas':q_meas,
-               'mu_next':mu_next_corr, 'cov_next':cov_next_corr, 'y_hat': y_hat, 'S_hat': S_hat,
+               'mu_next':mu_next_corr, 'cov_next':cov_next_corr, 'y_hat': y_t, 'S_hat': S_hat,
                'likelihood': likelihood}
     
     step_fn = ca.Function('ekf_step', fn_dict,
                           ['tau', 'mu', 'cov', 'q_meas'], # inputs to casadi function
                           ['mu_next', 'cov_next', 'S_hat', 'y_hat', 'likelihood'])        # outputs of casadi function
+
+    #print(step_fn)
     return step_fn
 
 class ekf():
