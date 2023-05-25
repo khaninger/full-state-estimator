@@ -22,7 +22,7 @@ class HybridParticleFilter:
 
 
         self.particles = []
-        self.num_particles = 20
+        self.num_particles = 30
         self.trans_matrix = np.array([[0.8, 0.2], [0.2, 0.8]])
         #self.belief_init = np.array([0.8, 0.2])
         #self.belief_free = 0.8
@@ -165,7 +165,7 @@ class HybridParticleFilter:
 
     def step(self, q, tau, F=None):
         self.propagate(q, tau, F=None)
-        self.calc_weights(q)
+        self.calc_weights()
         if self.N_eff < self.num_particles/5:
             self.StratifiedResampling()
         self.estimate_state()

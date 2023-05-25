@@ -93,11 +93,12 @@ class ros_observer():
             print("Error loading ROS message in joint_callback")
 
         if hasattr(self, 'observer'):
-            print("Before update")
+            #print("Before update")
             self.observer_update()
-            print('after update')
-            #print(self.x['mu'])
-            self.publish_state()
+            #print('after update')
+            #print(self.x['mu'][self.nq:])
+            print(self.x['belief_free'], self.x['belief_contact'])
+            #self.publish_state()
 
     def force_callback(self, msg):
         try:
@@ -140,8 +141,8 @@ def start_node(est_pars):
 def generate_traj(bag, est_pars = {}):
     print('Generating trajectory from {}'.format(bag))
     #p = init_rosparams()
-    msgs = bag_loader(bag, map_joint_state, topic_name = 'joint_states')
-    force_unaligned = bag_loader(bag, map_wrench, topic_name = 'wrench')
+    msgs = bag_loader(bag, map_joint_state, topic_name = '/joint_states')
+    force_unaligned = bag_loader(bag, map_wrench, topic_name = '/franka_state_controller/F_ext')
     force = get_aligned_msgs(msgs, force_unaligned)
 
     #robot = Robot(p, est_pars = est_pars)
@@ -155,7 +156,7 @@ def generate_traj(bag, est_pars = {}):
     results['true_pos'] = msgs['pos']
     results['true_vel'] = msgs['vel']
     results['f_ee'] = force['force']
-    results['input'] = msgs['torque']
+    results['torque_meas'] = msgs['torque']
     print("Results dict has elements: {}".format(results.keys()))
     
 
@@ -171,7 +172,7 @@ def generate_traj(bag, est_pars = {}):
         #    print(observer.cov)
 
         tic = time.perf_counter()
-        res = observer.step(q = msgs['pos'][:,i], tau = msgs['torque'][:,i])[0]
+        res = observer.step(q = msgs['pos'][:,i], tau = msgs['torque'][:,i])
         toc = time.perf_counter()
         update_freq.append(1/(toc-tic))
         #print(res['mu'][:6])
@@ -193,21 +194,30 @@ def param_fit(bag):
     print("Loading trjaectory for fitting params")
     with open(fname, 'rb') as f:
         results = pickle.load(f)
-    states = results['xi']
-    inputs = results['input']
+    #states = results['xi']
+    print(np.mean(results['true_vel'],axis=1))
+    print(np.mean(results['true_pos'], axis=1))
+    print(np.std(results['true_pos'], axis=1))
+
+    states = np.vstack((results['true_pos'], results['true_vel']))
+    torques = results['torque_meas']
 
     p_to_opt = {}
     p_to_opt['contact_1_pos'] = ca.SX.sym('pos',3)
     p_to_opt['contact_1_stiff'] = ca.SX.sym('stiff',3)
     p_to_opt['contact_1_rest'] = ca.SX.sym('rest',3)
 
-    p = init_rosparams()
+    robots = RobotDict("config_files/franka.yaml", ["config_files/contact.yaml", "config_files/free_space.yaml"], est_pars)
+    p = robots.raw_param_dict['contact']
+
+    #print(p)
     prediction_skip = 1
     p['h'] *= prediction_skip
     rob = Robot(p, opt_pars = p_to_opt)
-    optimized_par = optimize(states.T, inputs.T, p_to_opt, rob, prediction_skip)
+    optimized_par = optimize(states.T, torques.T, p_to_opt, rob, prediction_skip)
     for k,v in optimized_par.items():
-        rospy.set_param('contact_1_'+k, v.full().tolist())
+        print(f'{k}:{v}')
+        #rospy.set_param('contact_1_'+k, v.full().tolist())
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

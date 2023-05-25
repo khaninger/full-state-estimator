@@ -8,8 +8,10 @@ def build_step_fn(robot):
     # Build a static KF update w arguments of mu, sigma, tau and measured q
     proc_noise = robot.proc_noise
     meas_noise = robot.meas_noise
+    grav_torques = robot.vars['grav_torques']   # gravitational torques
 
-    #tau = robot.vars['tau']
+    #tau = robot.vars['tau'] - grav_torques
+
     mu = robot.vars['xi']
     mu_next = robot.vars['xi_next']
     tau_i = robot.vars['tau_i']  # expected contact torque
@@ -26,7 +28,7 @@ def build_step_fn(robot):
     #y_hat = C@mu
     S_hat = C@cov_next@(C.T) + meas_noise
     temp1 = ca.det(S_hat)**(-1/2)
-    y_t = ca.vertcat(mu_next[:robot.nq], tau_i)  # nonlinear predicted measurements
+    y_t = ca.vertcat(mu_next[:robot.nq], tau_i + grav_torques)  # nonlinear predicted measurements
     #print(mu_next)
     temp2 = ca.exp(-0.5*ca.transpose(z_meas-y_t) @ ca.inv(S_hat) @ (z_meas-y_t))
     mu_next_corr = mu_next + L@(z_meas - y_t)

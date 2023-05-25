@@ -5,10 +5,10 @@ from sensor_msgs.msg import JointState
 
 # Motor params for ur16, found in .ur_control for joint sizes 4,4,3,2,2,2
 p = {}
-p['gearratio'] = np.array(rospy.get_param('gearratio', [101, 101, 101, 54, 54, 54 ])) 
-p['torque_constant'] = np.array(rospy.get_param('torque_constant',
-                                                    [0.11968, 0.11968, 0.098322,
-                                                     0.10756, 0.10756, 0.10756 ]))
+#p['gearratio'] = np.array(rospy.get_param('gearratio', [101, 101, 101, 54, 54, 54 ]))
+#p['torque_constant'] = np.array(rospy.get_param('torque_constant',
+#                                                   [0.11968, 0.11968, 0.098322,
+#                                                     0.10756, 0.10756, 0.10756 ]))
 p['names'] = ['shoulder_pan_joint', 'shoulder_lift_joint',
                'elbow_joint', 'wrist_1_joint',
                'wrist_2_joint', 'wrist_3_joint']
@@ -58,7 +58,7 @@ def map_joint_state(msg, prev_msgs):
     if len(prev_msgs) == 0:
         for el in ('pos', 'vel', 'torque'):
             prev_msgs[el] = []
-    q,v,t = map_ur_joint_state(msg)
+    q,v,t = map_franka_joint_state(msg)
     prev_msgs['pos'].append(q)
     prev_msgs['vel'].append(v)
     prev_msgs['torque'].append(t)

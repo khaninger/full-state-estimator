@@ -2,7 +2,7 @@ import numpy as np
 import casadi as ca
 import time
 
-def loss_fn(states, inputs, param, robot, prediction_skip = 1, num_pts = 2000):
+def loss_fn(states, torques, param, robot, prediction_skip = 1, num_pts = 2000):
     ''' States is a trajectory as list.
         Param are the parameters to optimize
         disc_dyn is a function for next state as fn of state, input, param '''
@@ -17,41 +17,47 @@ def loss_fn(states, inputs, param, robot, prediction_skip = 1, num_pts = 2000):
     cont_pts_mean = ca.DM((0,0,0))
     for i in range(0, len(states)-prediction_skip, skip_size):
         param['xi'] = states[i]
-        param['tau'] = inputs[i]
-        res = robot.disc_dyn.call(param)
-        loss += ca.norm_2(states[i+prediction_skip]-res['xi_next'])
-        statedict = robot.get_statedict(res['xi_next'])
+        #param['tau'] = inputs[i]
+        res_dyn = robot.disc_dyn.call(param)
+        #loss += ca.norm_2(states[i+prediction_skip]-res['xi_next'])
+
+        res_obs = robot.obs.call(param)
+        loss += ca.norm_2(torques[i + prediction_skip] - res_obs['tau'])
+        statedict = robot.get_statedict(res_dyn['xi_next'])
         loss += 0.1*ca.norm_2(statedict['contact_1_disp'])
 
     del param['xi']
-    del param['tau']
+    #del param['tau']
 
     for k,v in param.items():
         if k == 'stiff':
             loss += 0#1e-12*ca.sqrt(ca.norm_1(v))
         elif k == 'pos':
-            loss += 50.*v.T@v #+ 100*v[0]*v[0]
+            loss += 0#50.*v.T@v #+ 100*v[0]*v[0]
     return loss
 
-def validate(states, inputs, param, robot, num_pts = 3500):
+def validate(states, torques, param, robot, num_pts = 3500):
     pred_state =  states[0]  # pred state will be the predicted next state based on dyn
     num_pts = len(states)
     state_err = 0.0
-    displacement = 0.0
+    obs_err = 0.0
     for i in range(0, len(states)-1):
         param['xi'] = states[i]
-        param['tau'] = inputs[i]
+        #param['tau'] = inputs[i]
 
-        res = robot.disc_dyn.call(param)
-        state_err += ca.norm_2(states[i+1]-res['xi_next'])
-        #displacement += ca.norm_2(res['disp'])
+        res_dyn = robot.disc_dyn.call(param)
+        # loss += ca.norm_2(states[i+prediction_skip]-res['xi_next'])
+
+        res_obs = robot.obs.call(param)
+        state_err += ca.norm_2(states[i+1]-res_dyn['xi_next'])
+        obs_err += ca.norm_2(torques[i]-res_obs['tau'])
 
     del param['xi']
-    del param['tau']
+    #del param['tau']
 
     print("At param values {}".format(param))
     print("State err: {}".format(state_err/len(states)))
-    print("Contact displacement: {}".format(displacement/len(states)))
+    print("Torque error: {}".format(obs_err/len(states)))
 
 def get_dec_vectors(param):
     x = []
@@ -67,8 +73,8 @@ def get_dec_vectors(param):
             ubx += [1e6*ca.DM.ones(3)]
         if 'pos' in k:
             x0 += [ca.DM((0.1, 0.1, 0.1))]
-            lbx += [ca.DM((-0.5, -0.5, 0.0))]
-            ubx += [ca.DM((0.5, 0.5, 0.6))]
+            lbx += [ca.DM((-1.0, -1.0, 0.0))]
+            ubx += [ca.DM((1.0, 1.0, 0.6))]
         if 'rest' in k:
             x0 += [ca.DM((-0.0, 0.0, 0.0))]
             lbx += [-2*ca.DM.ones(3)]
@@ -90,8 +96,8 @@ def package_results(res, param):
         read_pos += v_size
     return res_dict
 
-def optimize(states, inputs, param, robot, prediction_skip):
-    loss = loss_fn(states, inputs, param, robot, prediction_skip)
+def optimize(states, torques, param, robot, prediction_skip):
+    loss = loss_fn(states, torques, param, robot, prediction_skip)
 
     x, x0, lbx, ubx = get_dec_vectors(param)
     
@@ -115,7 +121,7 @@ def optimize(states, inputs, param, robot, prediction_skip):
     print("Solve time:  %s - %f sec" % (status, solve_time))
     print("Final obj:  {}".format(obj))
 
-    validate(states, inputs, res_dict, robot)
+    validate(states, torques, res_dict, robot)
     print("Fit param:  {}".format(res_dict))
 
     return res_dict

@@ -2,16 +2,14 @@ model: contact
 contact_models:
   - contact_1
 contact_1_pos:
-  - 1
-  - 1
-  - 1
+  - 0.0
+  - 0.0
+  - 0.05
 contact_1_stiff:
   - 0
   - 0
-  - 0
+  - 6000
 contact_1_rest:
-  - -0.4
-  - 0.3
-  - 0.12
-
-
+  - 0.38
+  - -0.53
+  - 0.25

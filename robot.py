@@ -90,9 +90,10 @@ class Robot():
         self.cov_init = ca.diag(ca.vertcat(*cov_init_vec))
         self.proc_noise = ca.diag(ca.vertcat(*proc_noise_vec))
         self.meas_noise = ca.diag(ca.vertcat(par['meas_noise']['pos'], par['meas_noise']['torques']))
+        #self.meas_noise = ca.diag(ca.vertcat(par['meas_noise']['pos']))
 
         self.nx = 2*self.nq+self.contact.np
-        self.ny = self.nq
+        self.ny = 2*self.nq  # with panda outputs are joint positions and torques
         
     def build_fwd_kin(self):
         q = self.vars['q']
@@ -119,6 +120,8 @@ class Robot():
         B = ca.diag(self.fric_model['visc'])
         #tau_err = tau - cpin.computeGeneralizedGravity(self.cmodel, self.cdata, q)
         tau_err = - cpin.computeGeneralizedGravity(self.cmodel, self.cdata, q)
+        #grav = cpin.computeGeneralizedGravity(self.cmodel, self.cdata, q)
+        self.vars['grav_torques'] = cpin.computeGeneralizedGravity(self.cmodel, self.cdata, self.vars['q'])  # gravitational torques
 
 
         M = cpin.crba(self.cmodel, self.cdata, q)+ca.diag(0.5*np.ones(self.nq))
@@ -126,11 +129,19 @@ class Robot():
 
         tau_i = self.contact.get_contact_torque(q)  # get total estimated contact torque
         self.vars['tau_i'] = tau_i  # make contact torque an independent variable
-
+        #trial = tau_i + self.grav_torques
+        #print(trial.shape)
         delta = Mtilde_inv@(-B@dq + tau_err + tau_i)
         fn_dict = {'xi': self.vars['xi']}
+        output_fn_dict = {'xi': self.vars['xi'],
+                          'tau': self.vars['tau_i']+self.vars['grav_torques']}
 
         fn_dict.update(opt_pars)
+        output_fn_dict.update(opt_pars)
+
+        self.obs = ca.Function('obs', output_fn_dict,
+                               ['xi', *opt_pars.keys()],
+                               ['tau'])
 
         dq_next= dq + h*delta
         q_next = q + h*dq_next
@@ -155,7 +166,7 @@ class Robot():
         A[nq:nq2, nq2:] += h*ddelta_dp
         
         #A = ca.jacobian(self.vars['xi_next'], self.vars['xi'])
-        C = ca.jacobian(tau_i, self.vars['xi'])
+        C = ca.jacobian(tau_i , self.vars['xi'])
         fn_dict['A'] = A
         self.A =  ca.Function('A', {k:fn_dict[k] for k in ('A', 'xi', *opt_pars.keys())},
                                  ['xi', *opt_pars.keys()],['A'], self.jit_options).expand()
@@ -197,6 +208,7 @@ class RobotDict():
         if robot_path:
             self.create_robot_dict(robot_path)
         self.param_dict = {}
+        self.raw_param_dict = {}
         if file_path:
             self.load_robot_models(file_path, est_par)
 
@@ -219,6 +231,7 @@ class RobotDict():
         final_dict = dict(local_list)
         final_dict.update(self.robot_param_dict)
         model_name = final_dict['model']
+        self.raw_param_dict[model_name] = final_dict
         return model_name, final_dict
 
     def load_robot_models(self, filepath, est_pars):
