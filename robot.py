@@ -32,7 +32,6 @@ class Robot():
         self.fric_model = par['fric_model']
 
         self.build_disc_dyn(par['h'], opt_pars)
-        print("Robot built")
 
 
     def get_statedict(self, xi):
@@ -50,19 +49,19 @@ class Robot():
         self.cdata = self.cmodel.createData()
         self.nq = self.model.nq
 
-    def build_vars(self, par, opt_pars, est_pars):
+    def build_vars(self, par,       # initial parameters
+                         opt_pars,  # parameters to be optimized
+                         est_pars): # parameters to be estimated
         self.vars['q'] = ca.SX.sym('q', self.nq)
         self.vars['dq'] = ca.SX.sym('dq', self.nq) 
         self.vars['tau'] = ca.SX.sym('tau', self.nq)
 
         self.build_fwd_kin()
-
-        self.vars['est_pars'], xii_con, ci_con, pn_con = self.contact.build_vars(par, est_pars)
         par.update(opt_pars)
+        self.vars['est_pars'], xii_con, ci_con, pn_con = self.contact.build_vars(par, est_pars)
         if par['contact_models'] != []:
-            self.contact.build_contact(par, self.vars['q'], self.x_ee)
+            self.contact.build_contact(par, self.vars['q'], self.x_ee, opt_pars)
             
-        
         xi_init = [par['q0'], ca.DM.zeros(self.nq), *xii_con]
         cov_init_vec = [par['cov_init']['q'], par['cov_init']['dq'], *ci_con]
         proc_noise_vec = [par['proc_noise']['q'], par['proc_noise']['dq'], *pn_con]
@@ -122,7 +121,6 @@ class Robot():
         obs_fn_dict = {'xi': self.vars['xi'],
                        'tau': self.vars['tau_i']+self.vars['tau_g']}
 
-        
         dyn_fn_dict.update(opt_pars)
         obs_fn_dict.update(opt_pars)
 

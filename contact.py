@@ -3,18 +3,18 @@ import casadi as ca
 
 class Contact():
     def __init__(self):
-        self.contact_info = {} # contact force models
-        self.torques = {} # contact force models
-        self.est_pars = {}
-        self.pars = {}
-        self.np = 0
+        self.contact_info = {} # contact displacement/point/force per contact model
+        self.torques = {}      # contact torque per contact model
+        self.est_pars = {}     # symbolic parameters
+        self.pars = {}         # all contact parameters
+        self.np = 0            # dim of symbolic params
 
-    def build_vars(self, par, est_par_dict):
+    def build_vars(self, par, est_pars):
         xi_init = []
         cov_init_vec = []
         proc_noise_vec = []
         
-        for contact, est_pars in est_par_dict.items():
+        for contact, est_pars, in est_pars.items():
             for est_par in est_pars:
                 name = contact+"_"+est_par
                 xi_init.append(par[name])
@@ -30,9 +30,8 @@ class Contact():
         self.np = est_pars_vec.shape[0]
         return est_pars_vec, xi_init, cov_init_vec, proc_noise_vec
 
-    def build_contact(self, par, q, x_ee):
+    def build_contact(self, par, q, x_ee, opt_pars={}):
         self.contacts = par['contact_models']
-        self.pars = {}
         for contact in self.contacts:
             self.pars[contact+'_pos']   = par[contact+'_pos']
             self.pars[contact+'_rest']  = par[contact+'_rest']
@@ -41,9 +40,11 @@ class Contact():
 
         fn_dict = {'q':q}
         fn_dict.update(self.est_pars)
+        fn_dict.update(opt_pars)
         res_dict = {}
         for contact in self.contacts:
             x_i = x_ee[0]+x_ee[1]@par[contact+'_'+'pos']
+            print(x_i)
             disp_i = x_i - par[contact+'_rest']
             n_i = par[contact+'_stiff']/ca.norm_2(par[contact+'_stiff'])
             J_i = ca.jacobian(n_i.T@x_i, q)
@@ -58,23 +59,22 @@ class Contact():
         
         fn_dict.update(res_dict)
         self.contact_info = ca.Function(contact+'_info', fn_dict,
-                                        ['q', *self.est_pars.keys()],
+                                        ['q', *self.est_pars.keys(), *opt_pars.keys()],
                                         [*res_dict.keys()]) 
             
-
     def get_contact_torque(self, q):
         tau = 0
         for contact in self.contacts:
             tau += self.torques[contact]
         return tau
             
-    def get_statedict(self, q, dq, est_pars):
+    def get_statedict(self, q, dq, sym_pars_vec):
         d = {'q':q}
         st = 0
         for par in self.est_pars.keys():
-            d[par] = est_pars[st:st+3]
+            d[par] = sym_pars_vec[st:st+3]
             st += 3
-        
+
         contact_info = self.contact_info.call(d)
         d.update(contact_info)
         force = 0

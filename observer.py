@@ -36,7 +36,7 @@ def build_step_fn(robot):
     likelihood = (2*np.pi)**(-N/2)*temp1*temp2
     #print(likelihood.shape)
     fn_dict = {'tau':tau_meas, 'mu':mu, 'cov':cov, 'q_meas':q_meas,
-               'mu_next':mu_next_corr, 'cov_next':cov_next_corr, 'y_hat': y_t, 'S_hat': S_hat,
+               'mu_next':mu_next_corr, 'cov_next':cov_next_corr, 'y_hat': y, 'S_hat': S_hat,
                'likelihood': likelihood}
     step_fn = ca.Function('ekf_step', fn_dict,
                           ['tau', 'mu', 'cov', 'q_meas'], # inputs to casadi function
@@ -64,6 +64,7 @@ class ekf():
 
     def get_statedict(self):
         return self.dyn_sys.get_statedict(self.x['mu'])
+    
     def likelihood(self, obs):
         return NotImplemented
 
