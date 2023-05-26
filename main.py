@@ -39,6 +39,7 @@ class ros_observer():
 
         print("Building observer")
         #self.observer = ekf(self.robots['free-space'])
+        #self.observer = ekf(self.robots['contact'])
         self.observer = HybridParticleFilter(self.robots)
         print("Observer ready to recieve msgs")
         
@@ -53,13 +54,15 @@ class ros_observer():
 
         if hasattr(self, 'observer'):
             self.observer_update()
-            print(self.x['mu'][self.nq:])
-            print(self.x['belief_free'], self.x['belief_contact'])
-            #self.publish_state()
+            #print(self.x['mu'][-self.nq:])
+            #print(self.x['est_force'])
+            #print(self.x['belief_free'], self.x['belief_contact'])
+            self.publish_state()
 
     def observer_update(self):
         self.x = self.observer.step(q = self.q_m,
                                     tau = self.tau_m)
+
 
     def publish_state(self):
         #ddq = self.x.get('ddq', np.zeros(self.observer.nq))
@@ -69,7 +72,7 @@ class ros_observer():
         msg_belief = build_jt_msg([self.x['belief_free'], self.x['belief_contact']])
         #print(msg_belief)
 
-        x, dx = self.params['free-space'].get_tcp_motion(self.x['mu'][:self.nq], self.x['mu'][-self.nq:])
+        x, dx = self.robots['free-space'].get_tcp_motion(self.x['mu'][:self.nq], self.x['mu'][-self.nq:])
         msg_ee = build_jt_msg((x[0].full(), dx.full()))
     
         if not rospy.is_shutdown():

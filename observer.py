@@ -16,7 +16,7 @@ def build_step_fn(robot):
     tau_i = robot.vars['tau_i']  # expected contact torque
     tau_g = robot.vars['tau_g']  # gravitational torques
     y = robot.vars['y']          # expected pos and torque observations 
-    
+
     A, C = robot.get_linearized({'xi': mu})  # get linearized state and observation matrices wrt states
     N = robot.nq
     q_meas = ca.SX.sym('q_meas', robot.nq)  # joint positions measurements
@@ -29,7 +29,8 @@ def build_step_fn(robot):
     #print(L.shape)
     #y_hat = C@mu
     S_hat = C@cov_next@(C.T) + meas_noise
-    temp1 = 0.1 #ca.det(S_hat)**(-1/2)
+    #temp1 = ca.det(S_hat)**(-1/2)
+    temp1 = 0.1
     temp2 = ca.exp(-0.5*ca.transpose(y_meas-y) @ ca.inv(S_hat) @ (y_meas-y))
     mu_next_corr = mu_next + L@(y_meas - y)
     cov_next_corr = (ca.SX.eye(robot.nx)-L@C)@cov_next # corrected covariance
@@ -37,10 +38,10 @@ def build_step_fn(robot):
     #print(likelihood.shape)
     fn_dict = {'tau':tau_meas, 'mu':mu, 'cov':cov, 'q_meas':q_meas,
                'mu_next':mu_next_corr, 'cov_next':cov_next_corr, 'y_hat': y, 'S_hat': S_hat,
-               'likelihood': likelihood}
+               'likelihood': likelihood, 'A': A, 'C': C}
     step_fn = ca.Function('ekf_step', fn_dict,
                           ['tau', 'mu', 'cov', 'q_meas'], # inputs to casadi function
-                          ['mu_next', 'cov_next', 'S_hat', 'y_hat', 'likelihood'])        # outputs of casadi function
+                          ['mu_next', 'cov_next', 'S_hat', 'y_hat', 'likelihood', 'A', 'C'])        # outputs of casadi function
 
     #print(step_fn)
     return step_fn
@@ -51,6 +52,7 @@ class ekf():
         self.x = {'mu':robot.xi_init, 'cov':robot.cov_init} 
         self.step_fn = build_step_fn(robot)
         self.dyn_sys = robot
+        self.nq = robot.nq
 
     def step(self, q, tau, F=None):
         step_args = {'tau':tau,
@@ -60,6 +62,7 @@ class ekf():
         res = self.step_fn.call(step_args)
         self.x['mu'] = res['mu_next']
         self.x['cov'] = res['cov_next']
+        self.x['est_force'] = res['y_hat'][-self.nq:]
         return self.x
 
     def get_statedict(self):

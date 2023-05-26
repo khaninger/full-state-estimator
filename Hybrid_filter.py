@@ -43,6 +43,8 @@ class HybridParticleFilter:
         self.S_t = np.zeros((self.num_particles, self.ny, self.ny))
         self.step_fn = {}
         self.modes_lst = list(robot.keys())  # getting the list of keys of robot dict, for mode sampling
+        self.A = np.zeros((self.num_particles, self.nx, self.nx))
+        self.C = np.zeros((self.num_particles, self.ny, self.ny))
 
         for k, v in robot.items():
             self.step_fn[k] = build_step_fn(v)
@@ -61,10 +63,25 @@ class HybridParticleFilter:
             particle.sampled_mode = np.random.choice(self.modes_lst, p=particle.mode)
             #print(tau.shape)
             #print(q.shape)
-            particle.mu, particle.Sigma, self.S_t[i], self.y_hat[i], particle.weight = self.step_fn[particle.sampled_mode](tau, particle.mu_prev, particle.Sigma_prev, q)
-            #print(self.particles)
+            step_args = {'tau': tau,
+                         'mu': particle.mu_prev,
+                         'cov': particle.Sigma_prev,
+                         'q_meas': q}
+            res = self.step_fn[particle.sampled_mode].call(step_args)
+            particle.mu = res['mu_next']
+            particle.Sigma = res['cov_next']
+            self.S_t[i] = res['S_hat']
+            self.y_hat[i] = res['y_hat']
+            particle.weight = res['likelihood']
             print(particle.weight)
-
+            #print(np.linalg.det(res['A']), np.linalg.det((res['C'])))
+            #print(res['C'])
+            #print(self.particles)
+            #print(np.linalg.det(self.S_t[i]))
+            #print(particle.sampled_mode, particle.weight)
+            #print(particle.sampled_mode, self.y_hat[i][-self.nq:])
+            #print(particle.sampled_mode, particle.mu[:self.nq])
+            #print(tau)
             particle.mu_prev = particle.mu
             particle.Sigma_prev = particle.Sigma
             #print(particle.Sigma.shape)
