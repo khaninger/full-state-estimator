@@ -1,12 +1,14 @@
 import argparse
 import pickle
 from os.path import exists
+import time
 
 import numpy as np
+import casadi as ca
 import rospy
 from sensor_msgs.msg import JointState
 from geometry_msgs.msg import WrenchStamped
-import casadi as ca
+
 from observer import ekf
 from Hybrid_filter import HybridParticleFilter
 from robot import Robot, RobotDict
@@ -32,6 +34,22 @@ class ros_observer():
         self.ee_pub    = rospy.Publisher('tcp_obs',
                                          JointState, queue_size=1)
 
+<<<<<<< HEAD
+        self.ee_pub = rospy.Publisher('observer_ee',
+                                      JointState, queue_size=1)
+        #self.f_ee_obs_pub = rospy.Publisher('force_ee_obs', JointState, queue_size=1)
+        #self.f_ee_mo_pub  = rospy.Publisher('force_ee_mo',  JointState, queue_size=1)
+
+        #self.params = init_rosparams()
+        self.params = RobotDict("config_files/franka.yaml", ["config_files/contact.yaml", "config_files/free_space.yaml"], est_pars).param_dict
+        self.ny = self.params['free-space'].ny
+        self.nq = self.params['free-space'].nq
+        self.nx = self.params['free-space'].nx
+
+        #self.robot = Robot(self.params, est_pars = est_pars)
+        #self.observer = ekf(self.robot)
+        self.observer = HybridParticleFilter(self.params)
+=======
         self.robots = RobotDict("config_files/franka.yaml", ["config_files/contact.yaml", "config_files/free_space.yaml"], est_pars).param_dict
         self.ny = self.robots['free-space'].ny
         self.nq = self.robots['free-space'].nq
@@ -41,27 +59,43 @@ class ros_observer():
         #self.observer = ekf(self.robots['free-space'])
         self.observer = HybridParticleFilter(self.robots)
         print("Observer ready to recieve msgs")
+>>>>>>> 68ba30838aa962b36ffa300e1e5d87229ca5d641
         
     def joint_callback(self, msg):
         """ To be called when the joint_state topic is published with joint position and torques """
         try:
+<<<<<<< HEAD
+            q, _, tau = map_franka_joint_state(msg)
+            self.q = np.array(q)
+            self.tau = np.array(tau)
+
+=======
             q_m, _, tau_m = map_franka_joint_state(msg)
             self.q_m = np.array(q_m)
             self.tau_m = np.array(tau_m)
+>>>>>>> 68ba30838aa962b36ffa300e1e5d87229ca5d641
         except:
             print("Error loading ROS message in joint_callback")
 
         if hasattr(self, 'observer'):
             self.observer_update()
+<<<<<<< HEAD
+            #print('after update')
+            #print(self.x['mu'][self.nq:])
+            #print(self.x['belief_free'], self.x['belief_contact'])
+            self.publish_state()
+=======
             print(self.x['mu'][self.nq:])
             print(self.x['belief_free'], self.x['belief_contact'])
             #self.publish_state()
+>>>>>>> 68ba30838aa962b36ffa300e1e5d87229ca5d641
 
     def observer_update(self):
         self.x = self.observer.step(q = self.q_m,
                                     tau = self.tau_m)
 
     def publish_state(self):
+<<<<<<< HEAD
         #ddq = self.x.get('ddq', np.zeros(self.observer.nq))
         #msg = build_jt_msg(self.x['q'], self.x['dq'],
                            #np.concatenate((self.x.get('stiff',[]), self.x.get('cont_pt', []))))
@@ -70,9 +104,14 @@ class ros_observer():
         #print(msg_belief)
 
         x, dx = self.params['free-space'].get_tcp_motion(self.x['mu'][:self.nq], self.x['mu'][-self.nq:])
+=======
+        msg = build_jt_msg(self.x['mu'][:self.nq], self.x['mu'][self.nq:])
+        x, dx = self.robots['free-space'].get_tcp_motion(self.x['mu'][:self.nq], self.x['mu'][-self.nq:])
+>>>>>>> 68ba30838aa962b36ffa300e1e5d87229ca5d641
         msg_ee = build_jt_msg((x[0].full(), dx.full()))
     
         if not rospy.is_shutdown():
+<<<<<<< HEAD
 
             self.joint_pub.publish(msg_belief)
             #self.ee_pub.publish(msg_ee)
@@ -81,6 +120,11 @@ class ros_observer():
         #msg_ee = build_jt_msg(x[0].full(), dx.full(), ddx.full())
         #if not rospy.is_shutdown():
             #self.ee_pub.publish(msg_ee)
+=======
+            self.joint_pub.publish(msg)
+            self.ee_pub.publish(msg_ee)
+
+>>>>>>> 68ba30838aa962b36ffa300e1e5d87229ca5d641
     def shutdown(self):
         print("Shutting down observer")
 
@@ -123,7 +167,6 @@ def generate_traj(bag, est_pars = {}):
         res = observer.step(q = msgs['pos'][:,i], tau = msgs['torque'][:,i])
         toc = time.perf_counter()
         update_freq.append(1/(toc-tic))
-        #print(res['mu'][:6])
         statedict = observer.get_statedict()
         for k,v in statedict.items():
             results[k][:,[i]] = v
