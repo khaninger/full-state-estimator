@@ -68,6 +68,7 @@ class ros_observer():
         #                                  self.force_callback, queue_size=1)
         self.joint_pub = rospy.Publisher('observer_jt',
                                          JointState, queue_size=1)
+
         self.ee_pub = rospy.Publisher('observer_ee',
                                       JointState, queue_size=1)
         #self.f_ee_obs_pub = rospy.Publisher('force_ee_obs', JointState, queue_size=1)
@@ -89,6 +90,7 @@ class ros_observer():
             q, _, tau = map_franka_joint_state(msg)
             self.q = np.array(q)
             self.tau = np.array(tau)
+
         except:
             print("Error loading ROS message in joint_callback")
 
@@ -97,8 +99,8 @@ class ros_observer():
             self.observer_update()
             #print('after update')
             #print(self.x['mu'][self.nq:])
-            print(self.x['belief_free'], self.x['belief_contact'])
-            #self.publish_state()
+            #print(self.x['belief_free'], self.x['belief_contact'])
+            self.publish_state()
 
     def force_callback(self, msg):
         try:
@@ -117,12 +119,16 @@ class ros_observer():
         #msg = build_jt_msg(self.x['q'], self.x['dq'],
                            #np.concatenate((self.x.get('stiff',[]), self.x.get('cont_pt', []))))
         msg = build_jt_msg(self.x['mu'][:self.nq], self.x['mu'][-self.nq:])
+        msg_belief = build_jt_msg([self.x['belief_free'], self.x['belief_contact']])
+        #print(msg_belief)
+
         x, dx = self.params['free-space'].get_tcp_motion(self.x['mu'][:self.nq], self.x['mu'][-self.nq:])
         msg_ee = build_jt_msg((x[0].full(), dx.full()))
         #msg_f = build_jt_msg(q = self.x['f_ee_mo'], dq = self.x['f_ee_obs'], tau = self.F)
         if not rospy.is_shutdown():
-            self.joint_pub.publish(msg)
-            self.ee_pub.publish(msg_ee)
+
+            self.joint_pub.publish(msg_belief)
+            #self.ee_pub.publish(msg_ee)
             #self.f_ee_obs_pub.publish(msg_f)
         #x, dx, ddx = self.observer.dyn_sys.get_tcp_motion(self.x['q'], self.x['dq'], ddq)
         #msg_ee = build_jt_msg(x[0].full(), dx.full(), ddx.full())

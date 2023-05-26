@@ -30,7 +30,7 @@ class HybridParticleFilter:
         #self.robot_dict = robot.param_dict
         self.N_eff = 0
         self.x = {'mu': robot['free-space'].xi_init, 'cov': robot['free-space'].cov_init,
-                  'belief_free': 0.8, 'belief_contact': 0.2}
+                  'belief_free': 0.5, 'belief_contact': 0.5}
         self.belief_init = np.array([self.x['belief_free'], self.x['belief_contact']])
         #print(self.x['mu'])
         self.proc_noise = robot['free-space'].proc_noise
@@ -63,6 +63,7 @@ class HybridParticleFilter:
             #print(q.shape)
             particle.mu, particle.Sigma, self.S_t[i], self.y_hat[i], particle.weight = self.step_fn[particle.sampled_mode](tau, particle.mu_prev, particle.Sigma_prev, q)
             #print(self.particles)
+            print(particle.weight)
 
             particle.mu_prev = particle.mu
             particle.Sigma_prev = particle.Sigma

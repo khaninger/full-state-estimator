@@ -27,13 +27,14 @@ def build_step_fn(robot):
     #print(L.shape)
     #y_hat = C@mu
     S_hat = C@cov_next@(C.T) + meas_noise
-    temp1 = ca.det(S_hat)**(-1/2)
+    #temp1 = ca.det(S_hat)**(-1/2)
     y_t = ca.vertcat(mu_next[:robot.nq], tau_i + grav_torques)  # nonlinear predicted measurements
     #print(mu_next)
-    temp2 = ca.exp(-0.5*ca.transpose(z_meas-y_t) @ ca.inv(S_hat) @ (z_meas-y_t))
+    #temp2 = ca.exp(-0.5*ca.transpose(z_meas-y_t) @ ca.inv(S_hat) @ (z_meas-y_t))
     mu_next_corr = mu_next + L@(z_meas - y_t)
     cov_next_corr = (ca.SX.eye(robot.nx)-L@C)@cov_next # corrected covariance
-    likelihood = (2*np.pi)**(-N/2)*temp1*temp2
+    #likelihood = (2*np.pi)**(-N/2)*temp1*temp2
+
     #print(likelihood.shape)
     fn_dict = {'tau':tau_meas, 'mu':mu, 'cov':cov, 'q_meas':q_meas,
                'mu_next':mu_next_corr, 'cov_next':cov_next_corr, 'y_hat': y_t, 'S_hat': S_hat,
