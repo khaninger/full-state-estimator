@@ -119,7 +119,7 @@ class Robot():
 
         dyn_fn_dict = {'xi': self.vars['xi']}
         obs_fn_dict = {'xi': self.vars['xi'],
-                       'tau': self.vars['tau_i']+self.vars['tau_g']}
+                       'tau': -self.vars['tau_i']+self.vars['tau_g']}
 
         dyn_fn_dict.update(opt_pars)
         obs_fn_dict.update(opt_pars)
