@@ -158,8 +158,6 @@ class HybridParticleFilter:
         self.particles = new_samples
 
 
-
-
     def get_statedict(self):
         return {}
 

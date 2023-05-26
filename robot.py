@@ -1,10 +1,9 @@
 import pinocchio as pin
-
 import pinocchio.casadi as cpin
 import numpy as np
 import casadi as ca
-from casadi_kin_dyn import pycasadi_kin_dyn
 import ruamel.yaml
+
 from contact import Contact
 
 class Robot():
@@ -27,12 +26,13 @@ class Robot():
 
         self.contact = Contact()
         self.new_obsMatrix = flag
-        self.load_kin_dyn(par['urdf'], par['urdf_path'])
+        self.load_kin(par['urdf_path'])
         self.build_vars(par, opt_pars, est_pars)
 
         self.fric_model = par['fric_model']
 
         self.build_disc_dyn(par['h'], opt_pars)
+        print("Robot built")
 
 
     def get_statedict(self, xi):
@@ -43,29 +43,11 @@ class Robot():
         d.update(self.contact.get_statedict(d['q'], d['dq'], xi[2*self.nq:]))
         return d
         
-    def load_kin_dyn(self, urdf, urdf_path):
+    def load_kin(self, urdf_path):
         self.model = pin.buildModelsFromUrdf(urdf_path, verbose = True)[0]
         self.data = self.model.createData()
         self.cmodel = cpin.Model(self.model)
         self.cdata = self.cmodel.createData()
-        #kindyn = pycasadi_kin_dyn.CasadiKinDyn(urdf)
-        #self.fwd_kin  = ca.Function.deserialize(kindyn.fk('fr3_link7')) #tool0 with UR
-        q = ca.SX.sym('q', 7)
-        v = ca.SX.sym('v', 7)
-        a = ca.SX.sym('a', 7)
-        cpin.forwardKinematics(self.cmodel, self.cdata, q, v, a)
-        cpin.updateFramePlacement(self.cmodel, self.cdata, self.cmodel.getFrameId('fr3_link7'))
-        #print(fwd_kin)
-        #for name, oMF in zip(self.cmodel.names, self.cdata.oMf):
-            #print(name)
-            #print(oMF)
-        #print(self.cdata.oMf.keys())
-        #print(self.cmodel.getFrameId('fr3_link7')))
-        ee = self.cdata.oMf[self.cmodel.getFrameId('fr3_link8')]
-        print(type(ee))
-        #print(ee.rotation)
-        self.fwd_kin =  ca.Function('p',[q],[ee.translation, ee.rotation])
-        print(self.fwd_kin(np.ones(7)))
         self.nq = self.model.nq
 
     def build_vars(self, par, opt_pars, est_pars):
@@ -98,7 +80,12 @@ class Robot():
     def build_fwd_kin(self):
         q = self.vars['q']
         dq = self.vars['dq']
-        
+        ddq = ca.SX.sym('ddq', 7)
+        cpin.forwardKinematics(self.cmodel, self.cdata, q, dq, ddq)
+        cpin.updateFramePlacement(self.cmodel, self.cdata, self.cmodel.getFrameId('fr3_link8'))
+        ee = self.cdata.oMf[self.cmodel.getFrameId('fr3_link8')]
+        self.fwd_kin =  ca.Function('p',[q],[ee.translation, ee.rotation])
+        #print(self.fwd_kin(np.array([-0.58, 0.54, -0.39, -1.83, 0.27, 2.35, -2.68])))
         self.x_ee = self.fwd_kin(q) # x is TCP pose as (pos, R), where pos is a 3-Vector and R a rotation matrix
     
         J = ca.jacobian(self.x_ee[0], q)
@@ -118,45 +105,45 @@ class Robot():
         dq = self.vars['dq']
         #tau = self.vars['tau']
         B = ca.diag(self.fric_model['visc'])
-        #tau_err = tau - cpin.computeGeneralizedGravity(self.cmodel, self.cdata, q)
-        tau_err = - cpin.computeGeneralizedGravity(self.cmodel, self.cdata, q)
-        #grav = cpin.computeGeneralizedGravity(self.cmodel, self.cdata, q)
-        self.vars['grav_torques'] = cpin.computeGeneralizedGravity(self.cmodel, self.cdata, self.vars['q'])  # gravitational torques
+        #tau_err = tau - cpin.computeGeneralizedGravity(self.cmodel, self.cdata, q) # Difference between input torques and dynamics torques
+        tau_err = ca.DM.zeros(self.nq)  # Torques from dynamic error. We assume the dynamics torques are compensated by the inner controller 
 
-
+        self.vars['tau_g'] = cpin.computeGeneralizedGravity(self.cmodel, self.cdata, self.vars['q'])  # gravitational torques
+        
         M = cpin.crba(self.cmodel, self.cdata, q)+ca.diag(0.5*np.ones(self.nq))
         Mtilde_inv = ca.inv(M+h*B)
 
         tau_i = self.contact.get_contact_torque(q)  # get total estimated contact torque
         self.vars['tau_i'] = tau_i  # make contact torque an independent variable
-        #trial = tau_i + self.grav_torques
-        #print(trial.shape)
+
         delta = Mtilde_inv@(-B@dq + tau_err + tau_i)
-        fn_dict = {'xi': self.vars['xi']}
-        output_fn_dict = {'xi': self.vars['xi'],
-                          'tau': self.vars['tau_i']+self.vars['grav_torques']}
 
-        fn_dict.update(opt_pars)
-        output_fn_dict.update(opt_pars)
+        dyn_fn_dict = {'xi': self.vars['xi']}
+        obs_fn_dict = {'xi': self.vars['xi'],
+                       'tau': self.vars['tau_i']+self.vars['tau_g']}
 
-        self.obs = ca.Function('obs', output_fn_dict,
-                               ['xi', *opt_pars.keys()],
-                               ['tau'])
+        
+        dyn_fn_dict.update(opt_pars)
+        obs_fn_dict.update(opt_pars)
 
+        self.obs = ca.Function('obs', obs_fn_dict, ['xi', *opt_pars.keys()], ['tau'])
+        self.vars['y'] = ca.vertcat(q, obs_fn_dict['tau'])
+        
         dq_next= dq + h*delta
         q_next = q + h*dq_next
-        fn_dict['xi_next'] = ca.vertcat(q_next, dq_next, fn_dict['xi'][nq2:])
-        self.vars['xi_next'] = fn_dict['xi_next']
-        #print(self.vars['xi_next'].shape)
-        #print(M.shape)
-        self.disc_dyn = ca.Function('disc_dyn', fn_dict,
+        
+        dyn_fn_dict['xi_next'] = ca.vertcat(q_next, dq_next, dyn_fn_dict['xi'][nq2:])
+        self.vars['xi_next'] = dyn_fn_dict['xi_next']
+        
+        self.disc_dyn = ca.Function('disc_dyn', dyn_fn_dict,
                                      ['xi', *opt_pars.keys()],
                                      ['xi_next'], self.jit_options).expand()    
-        #print(self.disc_dyn)
+    
         ddelta_dq = Mtilde_inv@ca.jacobian(tau_i, q) #ignoring derivative of Mtilde_inv wrt q, ~5x speedup
         ddelta_ddq = -Mtilde_inv@B
         ddelta_dp = Mtilde_inv@ca.jacobian(tau_i, self.vars['xi'][nq2:]) #ignoring derivative of Mtilde_inv wrt q, ~5x speedup
 
+        #A = ca.jacobian(self.vars['xi_next'], self.vars['xi']) # Old method which is slightly less efficient
         A = ca.SX.eye(self.nx)
         A[:nq, :nq] +=  h*h*ddelta_dq
         A[:nq, nq:nq2] += h*ca.SX.eye(nq)+h*h*ddelta_ddq
@@ -164,17 +151,15 @@ class Robot():
         A[nq:nq2, :nq] += h*ddelta_dq
         A[nq:nq2, nq:nq2] += h*ddelta_ddq
         A[nq:nq2, nq2:] += h*ddelta_dp
-        
-        #A = ca.jacobian(self.vars['xi_next'], self.vars['xi'])
-        C = ca.jacobian(tau_i , self.vars['xi'])
-        fn_dict['A'] = A
-        self.A =  ca.Function('A', {k:fn_dict[k] for k in ('A', 'xi', *opt_pars.keys())},
+        dyn_fn_dict['A'] = A
+        self.A =  ca.Function('A', {k:dyn_fn_dict[k] for k in ('A', 'xi', *opt_pars.keys())},
                                  ['xi', *opt_pars.keys()],['A'], self.jit_options).expand()
         #print(self.A)
+        
         self.C_positions = np.hstack((np.eye(self.nq), np.zeros((self.nq, self.nx-self.nq))))   # previous constant observation matrix with only joint positions
-        C_new = ca.vertcat(self.C_positions, C)  # build new observation matrix with joint positions and torques
-        fn_dict['C'] = C_new  # add new tuple to the dictionary for new state dependent observation matrix
-        self.C_torques = ca.Function('C', {k: fn_dict[k] for k in ('C', 'xi', *opt_pars.keys())},
+        C_tau = ca.jacobian(tau_i , self.vars['xi'])
+        dyn_fn_dict['C'] = ca.vertcat(self.C_positions, C_tau)  # build new observation matrix with joint positions and torques
+        self.C_torques = ca.Function('C', {k: dyn_fn_dict[k] for k in ('C', 'xi', *opt_pars.keys())},
                              ['xi', *opt_pars.keys()], ['C'], self.jit_options).expand()  # build new casadi function for new observation matrix
         #print(self.A.call({'xi': self.vars['xi']})['A'].shape)
 

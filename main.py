@@ -1,133 +1,77 @@
 import argparse
 import pickle
 from os.path import exists
+import time
 
 import numpy as np
+import casadi as ca
 import rospy
 from sensor_msgs.msg import JointState
 from geometry_msgs.msg import WrenchStamped
-import casadi as ca
+
 from observer import ekf
 from Hybrid_filter import HybridParticleFilter
 from robot import Robot, RobotDict
 from helper_fns import *
 from param_fit import *
-import time
 
-def init_rosparams():
-    p = {}
-    p['urdf'] = rospy.get_param('robot_description')
-    #p['urdf_path'] = rospy.get_param('urdf_description', 'urdf/src/universal_robot/ur_description/urdf/ur16e.urdf')
-    p['urdf_path'] = rospy.get_param('urdf_description', 'urdf/src/universal_robot/franka_description/robots/fr3.urdf')
-    # TODO: update for franka emika, should be in order
-    p['joint_names'] = [ 'shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_joint',
-                         'wrist_1_joint', 'wrist_2_joint', 'wrist_3_joint']
-
-    p['fric_model']= {'visc':np.array(rospy.get_param('visc_fric', [0.4]*6))}
-    p['h'] = rospy.get_param('obs_rate', 1./500.)
-
-    p['proc_noise'] = {'q':  np.array(rospy.get_param('pos_noise', [1e-2]*6)),
-                       'dq':  np.array(rospy.get_param('vel_noise', [1e5]*6)),
-                       'pos': np.array(rospy.get_param('geom_noise', [1e1]*3)),
-                       'stiff':np.array(rospy.get_param('stiff_noise', [8e6]*3))}
-    p['cov_init'] = {'q': [1e-2]*6,
-                     'dq': [1e5]*6,
-                     'pos':[1.5e6]*3,
-                     'stiff':[6e6]*3}
-    p['meas_noise'] = {'pos':np.array(rospy.get_param('meas_noise', [1e-1]*6))}
-    p['contact_models'] = ['contact_1']
-    p['contact_1_pos']   = ca.DM(rospy.get_param('contact_1_pos', [0.1]*3))
-    p['contact_1_stiff'] = ca.DM(rospy.get_param('contact_1_stiff', [100]*3))
-    p['contact_1_rest']  = ca.DM(rospy.get_param('contact_1_rest', [-0.4, 0.3, 0.12]))
-    p['S_t0'] = {'pos':np.array(rospy.get_param('meas_noise', [1e-1]*6))}
-    p['mom_obs_K'] = [20]*6
-    p['q0'] = np.array([2.29, -1.02, -0.9, -2.87, 1.55, 0.56])
-    p['num_particles'] = 20
-    p['belief_init'] = np.array([0.8, 0.2])
-    p['transition_matrix'] = np.array([[0.8, 0.2], [0.2, 0.8]])
-    p['sampled_mode'] = np.random.choice(['free-space', 'contact'], p=p['belief_init'])
-    p['weight0'] = 1/p['num_particles']
-
-    return p
 
 class ros_observer():
     """ This handles the ros interface, loads models, etc
     """
     def __init__(self, joint_topic = 'joint_states',
-                 force_topic = 'wrench', est_pars = {}):
+                       force_topic = 'wrench',
+                       est_pars = {}):
         
-        self.q = None        # joint position
-        self.tau_err = None  # torque error
-        self.tau = None      # motor torque
-        self.F = None        # EE force
-        self.x = None        # observer state
-        #print(joint_topic)
+        self.q_m = None        # measured joint position
+        self.tau_m = None      # measured joint torque
+        self.x = None          # observer state
+
         self.joint_sub = rospy.Subscriber(joint_topic, JointState,
-                                           self.joint_callback, queue_size=1)
-        #self.force_sub = rospy.Subscriber(force_topic, WrenchStamped,
-        #                                  self.force_callback, queue_size=1)
-        self.joint_pub = rospy.Publisher('observer_jt',
+                                          self.joint_callback, queue_size=1)
+        self.joint_pub = rospy.Publisher('joint_states_obs',
                                          JointState, queue_size=1)
-        self.ee_pub = rospy.Publisher('observer_ee',
-                                      JointState, queue_size=1)
-        #self.f_ee_obs_pub = rospy.Publisher('force_ee_obs', JointState, queue_size=1)
-        #self.f_ee_mo_pub  = rospy.Publisher('force_ee_mo',  JointState, queue_size=1)
+        self.ee_pub    = rospy.Publisher('tcp_obs',
+                                         JointState, queue_size=1)
 
-        #self.params = init_rosparams()
-        self.params = RobotDict("config_files/franka.yaml", ["config_files/contact.yaml", "config_files/free_space.yaml"], est_pars).param_dict
-        self.ny = self.params['free-space'].ny
-        self.nq = self.params['free-space'].nq
-        self.nx = self.params['free-space'].nx
+        self.robots = RobotDict("config_files/franka.yaml", ["config_files/contact.yaml", "config_files/free_space.yaml"], est_pars).param_dict
+        self.ny = self.robots['free-space'].ny
+        self.nq = self.robots['free-space'].nq
+        self.nx = self.robots['free-space'].nx
 
-        #self.robot = Robot(self.params, est_pars = est_pars)
-        #self.observer = ekf(self.robot)
-        self.observer = HybridParticleFilter(self.params)
+        print("Building observer")
+        #self.observer = ekf(self.robots['free-space'])
+        self.observer = HybridParticleFilter(self.robots)
+        print("Observer ready to recieve msgs")
         
     def joint_callback(self, msg):
         """ To be called when the joint_state topic is published with joint position and torques """
         try:
-            q, _, tau = map_franka_joint_state(msg)
-            self.q = np.array(q)
-            self.tau = np.array(tau)
+            q_m, _, tau_m = map_franka_joint_state(msg)
+            self.q_m = np.array(q_m)
+            self.tau_m = np.array(tau_m)
         except:
             print("Error loading ROS message in joint_callback")
 
         if hasattr(self, 'observer'):
-            #print("Before update")
             self.observer_update()
-            #print('after update')
-            #print(self.x['mu'][self.nq:])
+            print(self.x['mu'][self.nq:])
             print(self.x['belief_free'], self.x['belief_contact'])
             #self.publish_state()
 
-    def force_callback(self, msg):
-        try:
-            self.F = np.vstack((msg.wrench.force.x,  msg.wrench.force.y,  msg.wrench.force.z,
-                                 msg.wrench.torque.x, msg.wrench.torque.y, msg.wrench.torque.z))
-        except:
-            print("Error loading ROS message in force_callback")
- 
     def observer_update(self):
-        self.x = self.observer.step(q = self.q,
-                                    tau = self.tau,
-                                    F = self.F)
+        self.x = self.observer.step(q = self.q_m,
+                                    tau = self.tau_m)
 
     def publish_state(self):
-        #ddq = self.x.get('ddq', np.zeros(self.observer.nq))
-        #msg = build_jt_msg(self.x['q'], self.x['dq'],
-                           #np.concatenate((self.x.get('stiff',[]), self.x.get('cont_pt', []))))
-        msg = build_jt_msg(self.x['mu'][:self.nq], self.x['mu'][-self.nq:])
-        x, dx = self.params['free-space'].get_tcp_motion(self.x['mu'][:self.nq], self.x['mu'][-self.nq:])
+        msg = build_jt_msg(self.x['mu'][:self.nq], self.x['mu'][self.nq:])
+        x, dx = self.robots['free-space'].get_tcp_motion(self.x['mu'][:self.nq], self.x['mu'][-self.nq:])
         msg_ee = build_jt_msg((x[0].full(), dx.full()))
-        #msg_f = build_jt_msg(q = self.x['f_ee_mo'], dq = self.x['f_ee_obs'], tau = self.F)
+    
         if not rospy.is_shutdown():
             self.joint_pub.publish(msg)
             self.ee_pub.publish(msg_ee)
-            #self.f_ee_obs_pub.publish(msg_f)
-        #x, dx, ddx = self.observer.dyn_sys.get_tcp_motion(self.x['q'], self.x['dq'], ddq)
-        #msg_ee = build_jt_msg(x[0].full(), dx.full(), ddx.full())
-        #if not rospy.is_shutdown():
-            #self.ee_pub.publish(msg_ee)
+
     def shutdown(self):
         print("Shutting down observer")
 
@@ -135,12 +79,11 @@ def start_node(est_pars):
     rospy.init_node('observer')
     node = ros_observer(est_pars=est_pars)
     rospy.on_shutdown(node.shutdown)  # Set shutdown to be executed when ROS exits
-    #print("Spinning observer")
     rospy.spin()
 
 def generate_traj(bag, est_pars = {}):
     print('Generating trajectory from {}'.format(bag))
-    #p = init_rosparams()
+    
     msgs = bag_loader(bag, map_joint_state, topic_name = '/joint_states')
     force_unaligned = bag_loader(bag, map_wrench, topic_name = '/franka_state_controller/F_ext')
     force = get_aligned_msgs(msgs, force_unaligned)
@@ -153,20 +96,14 @@ def generate_traj(bag, est_pars = {}):
 
     sd_initial = observer.get_statedict()
     results = {k:np.zeros((v.shape[0], num_msgs)) for k,v in sd_initial.items()}
-    results['true_pos'] = msgs['pos']
-    results['true_vel'] = msgs['vel']
+    results['q_m'] = msgs['pos']
+    results['dq_m'] = msgs['vel']
     results['f_ee'] = force['force']
-    results['torque_meas'] = msgs['torque']
+    results['tau_meas'] = msgs['torque']
     print("Results dict has elements: {}".format(results.keys()))
     
-
-    f_ee_mo = np.zeros((3, num_msgs))
-
     update_freq = []
 
-    #for i in range(2000):
-        #res = observer.step(q = msgs['pos'][:,0], tau = msgs['torque'][:,0])
-    
     for i in range(num_msgs):
         #if i == 1 or i == 1000 or i == 3000:
         #    print(observer.cov)
@@ -175,7 +112,6 @@ def generate_traj(bag, est_pars = {}):
         res = observer.step(q = msgs['pos'][:,i], tau = msgs['torque'][:,i])
         toc = time.perf_counter()
         update_freq.append(1/(toc-tic))
-        #print(res['mu'][:6])
         statedict = observer.get_statedict()
         for k,v in statedict.items():
             results[k][:,[i]] = v
@@ -191,7 +127,7 @@ def param_fit(bag):
     fname = bag[:-4]+'.pkl'
     if not exists(fname):
         generate_traj(bag)
-    print("Loading trjaectory for fitting params")
+    print("Loading trajectory for fitting params")
     with open(fname, 'rb') as f:
         results = pickle.load(f)
     #states = results['xi']
@@ -243,6 +179,5 @@ if __name__ == '__main__':
     elif args.opt_param:
         if args.bag == "": rospy.signal_shutdown("Need bag to optimize params from")
         param_fit(args.bag)
-        generate_traj(args.bag)
     else:
         start_node(est_pars)
