@@ -32,19 +32,21 @@ class Contact():
 
     def build_contact(self, par, q, x_ee, opt_pars={}):
         self.contacts = par['contact_models']
+        
         for contact in self.contacts:
             self.pars[contact+'_pos']   = par[contact+'_pos']
             self.pars[contact+'_rest']  = par[contact+'_rest']
             self.pars[contact+'_stiff'] = par[contact+'_stiff']
         self.pars.update(self.est_pars)
-
+        self.pars.update(opt_pars)
+        self.opt_pars = {k:v for k,v in opt_pars.items()}
+    
         fn_dict = {'q':q}
         fn_dict.update(self.est_pars)
         fn_dict.update(opt_pars)
         res_dict = {}
         for contact in self.contacts:
             x_i = x_ee[0]+x_ee[1]@par[contact+'_'+'pos']
-            print(x_i)
             disp_i = x_i - par[contact+'_rest']
             n_i = par[contact+'_stiff']/ca.norm_2(par[contact+'_stiff'])
             J_i = ca.jacobian(n_i.T@x_i, q)
@@ -60,7 +62,7 @@ class Contact():
         fn_dict.update(res_dict)
         self.contact_info = ca.Function(contact+'_info', fn_dict,
                                         ['q', *self.est_pars.keys(), *opt_pars.keys()],
-                                        [*res_dict.keys()]) 
+                                        [*res_dict.keys()])
             
     def get_contact_torque(self, q):
         tau = 0
@@ -70,6 +72,7 @@ class Contact():
             
     def get_statedict(self, q, dq, sym_pars_vec):
         d = {'q':q}
+        d.update(self.opt_pars)
         st = 0
         for par in self.est_pars.keys():
             d[par] = sym_pars_vec[st:st+3]

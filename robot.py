@@ -172,8 +172,6 @@ class Robot():
         else:
             return self.A.call(state)['A'], self.C_positions
 
-
-
 class RobotDict():
     """
     This class creates the dictionary of robot instances according to different configuration files,

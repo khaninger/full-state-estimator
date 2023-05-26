@@ -16,19 +16,19 @@ def loss_fn(states, torques, param, robot, prediction_skip = 1, num_pts = 2000):
     for i in range(0, len(states)-prediction_skip, skip_size):
         param['xi'] = states[i]
         res_dyn = robot.disc_dyn.call(param)
-        #loss += ca.norm_2(states[i+prediction_skip]-res['xi_next'])
+        loss += ca.norm_2(states[i+prediction_skip]-res_dyn['xi_next'])
 
         res_obs = robot.obs.call(param)
-        loss += 0.0*ca.norm_2(torques[i] - res_obs['tau'])
+        loss += 1.0*ca.norm_2(torques[i] - res_obs['tau'])
         statedict = robot.get_statedict(states[i])
         loss += 100*ca.norm_2(statedict['contact_1_disp'])
 
     del param['xi']
     for k,v in param.items():
         if 'stiff' in k:
-            loss += 0#1e-12*ca.sqrt(ca.norm_1(v))
+            loss += 1e-12*ca.sqrt(ca.norm_1(v))
         elif 'pos' in k:
-            loss += 100.*v.T@v #+ 100*v[0]*v[0]
+            loss += 100000.*v.T@v #+ 100*v[0]*v[0]
     return loss
 
 def validate(states, torques, param, robot, num_pts = 3500):
@@ -51,8 +51,8 @@ def validate(states, torques, param, robot, num_pts = 3500):
     #del param['tau']
 
     print("At param values {}".format(param))
-    print("State err: {}".format(state_err/len(states)))
-    print("Torque error: {}".format(obs_err/len(states)))
+    print("Avg state err:  {}".format(state_err/len(states)))
+    print("Avg torque err: {}".format(obs_err/len(states)))
 
 def get_dec_vectors(param):
     x = []
@@ -71,9 +71,9 @@ def get_dec_vectors(param):
             lbx += [ca.DM((-0.2, -0.2, 0.0))]
             ubx += [ca.DM((0.2, 0.2, 0.6))]
         if 'rest' in k:
-            x0 += [ca.DM((-0.0, 0.0, 0.0))]
-            lbx += [-2*ca.DM.ones(3)]
-            ubx += [2*ca.DM.ones(3)]
+            x0 += [ca.DM((0.0, 0.0, 0.0))]
+            lbx += [-1*ca.DM.ones(3)]
+            ubx += [1*ca.DM.ones(3)]
     
     x = ca.vertcat(*x)
     x0 = ca.vertcat(*x0)

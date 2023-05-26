@@ -133,9 +133,9 @@ def param_fit(bag):
     with open(fname, 'rb') as f:
         results = pickle.load(f)
     #states = results['xi']
-    print(np.mean(results['q_m'],axis=1))
-    print(np.mean(results['dq_m'], axis=1))
-    print(np.std(results['dq_m'], axis=1))
+    #print(np.mean(results['q_m'],axis=1))
+    #print(np.mean(results['dq_m'], axis=1))
+    #print(np.std(results['dq_m'], axis=1))
 
     states = np.vstack((results['q_m'], results['dq_m']))
     tau_ms = results['tau_m']
