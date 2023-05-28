@@ -71,13 +71,17 @@ class HybridParticleFilter:
             particle.mu = res['mu_next']
             particle.Sigma = res['cov_next']
             self.S_t[i] = res['S_hat']
-            self.y_hat[i] = res['y_hat']
+            self.y_hat[i] = res['y_hat']   # predicted measurements
             particle.weight = res['likelihood']
-            print(particle.weight)
-            #print(np.linalg.det(res['A']), np.linalg.det((res['C'])))
-            #print(res['C'])
+
+            #print(particle.sampled_mode, particle.weight)
+            print(np.linalg.det(res['A']), particle.sampled_mode)
+            #print(np.linalg.det(res['C']))
+            #print(ca.det(res['C']))
             #print(self.particles)
-            #print(np.linalg.det(self.S_t[i]))
+            #print(np.linalg.det(res['cov_next_pre']), particle.sampled_mode)
+            #print(np.linalg.det(self.S_t[i]), particle.sampled_mode)
+            #print(np.all(np.linalg.eigvalsh(self.S_t[i]) > 0))
             #print(particle.sampled_mode, particle.weight)
             #print(particle.sampled_mode, self.y_hat[i][-self.nq:])
             #print(particle.sampled_mode, particle.mu[:self.nq])

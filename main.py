@@ -29,8 +29,8 @@ class ros_observer():
                                           self.joint_callback, queue_size=1)
         self.joint_pub = rospy.Publisher('joint_states_obs',
                                          JointState, queue_size=1)
-        self.ee_pub    = rospy.Publisher('tcp_obs',
-                                         JointState, queue_size=1)
+        self.ee_pub = rospy.Publisher('tcp_obs',
+                                      JointState, queue_size=1)
 
         self.robots = RobotDict("config_files/franka.yaml", ["config_files/contact.yaml", "config_files/free_space.yaml"], est_pars).param_dict
         self.ny = self.robots['free-space'].ny

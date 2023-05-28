@@ -25,10 +25,16 @@ def build_step_fn(robot):
     cov = ca.SX.sym('cov', mu.shape[0], mu.shape[0])
 
     cov_next = A@cov@(A.T) + proc_noise
+
+
     L = cov_next@C.T@ca.inv(C@cov_next@(C.T) + meas_noise)  # calculate Kalman gain
+
     #print(L.shape)
     #y_hat = C@mu
     S_hat = C@cov_next@(C.T) + meas_noise
+    #log_likelihood = -0.5*(np.log(ca.det(S_hat)) + ca.transpose(y_meas-y)@ca.inv(S_hat)@(y_meas-y) + N*np.log(2*np.pi))  # expression for log-likelihood
+    #print(S_hat)
+    #print(log_likelihood)
     #temp1 = ca.det(S_hat)**(-1/2)
     temp1 = 0.1
     temp2 = ca.exp(-0.5*ca.transpose(y_meas-y) @ ca.inv(S_hat) @ (y_meas-y))
@@ -38,10 +44,10 @@ def build_step_fn(robot):
     #print(likelihood.shape)
     fn_dict = {'tau':tau_meas, 'mu':mu, 'cov':cov, 'q_meas':q_meas,
                'mu_next':mu_next_corr, 'cov_next':cov_next_corr, 'y_hat': y, 'S_hat': S_hat,
-               'likelihood': likelihood, 'A': A, 'C': C}
+               'likelihood': likelihood, 'A': A, 'C': C, 'cov_next_pre': cov_next}
     step_fn = ca.Function('ekf_step', fn_dict,
                           ['tau', 'mu', 'cov', 'q_meas'], # inputs to casadi function
-                          ['mu_next', 'cov_next', 'S_hat', 'y_hat', 'likelihood', 'A', 'C'])        # outputs of casadi function
+                          ['mu_next', 'cov_next', 'S_hat', 'y_hat', 'likelihood', 'A', 'C', 'cov_next_pre'])        # outputs of casadi function
 
     #print(step_fn)
     return step_fn
