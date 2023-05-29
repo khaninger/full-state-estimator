@@ -35,8 +35,11 @@ def build_step_fn(robot):
     #log_likelihood = -0.5*(np.log(ca.det(S_hat)) + ca.transpose(y_meas-y)@ca.inv(S_hat)@(y_meas-y) + N*np.log(2*np.pi))  # expression for log-likelihood
     #print(S_hat)
     #print(log_likelihood)
-    #temp1 = ca.det(S_hat)**(-1/2)
-    temp1 = 0.1
+    [Q, R] = ca.qr(S_hat)  # QR decomposition for evaluating determinant efficiently
+    det_S_t = ca.trace(R)  # determinant of original predicted measurement covariance is just the product of diagonal elements of R --> block triangular
+    log_likelihood = -0.5 * (np.log(det_S_t) + ca.transpose(y_meas - y) @ ca.inv(S_hat) @ (y_meas - y) + N * np.log(2 * np.pi))
+    temp1 = det_S_t**(-1/2)
+    #temp1 = 0.1
     temp2 = ca.exp(-0.5*ca.transpose(y_meas-y) @ ca.inv(S_hat) @ (y_meas-y))
     mu_next_corr = mu_next + L@(y_meas - y)
     cov_next_corr = (ca.SX.eye(robot.nx)-L@C)@cov_next # corrected covariance
@@ -44,10 +47,10 @@ def build_step_fn(robot):
     #print(likelihood.shape)
     fn_dict = {'tau':tau_meas, 'mu':mu, 'cov':cov, 'q_meas':q_meas,
                'mu_next':mu_next_corr, 'cov_next':cov_next_corr, 'y_hat': y, 'S_hat': S_hat,
-               'likelihood': likelihood, 'A': A, 'C': C, 'cov_next_pre': cov_next}
+               'likelihood': likelihood, 'A': A, 'C': C, 'cov_next_pre': cov_next, 'Q': Q, 'tau_ext': tau_i, 'tau_g': tau_g}
     step_fn = ca.Function('ekf_step', fn_dict,
                           ['tau', 'mu', 'cov', 'q_meas'], # inputs to casadi function
-                          ['mu_next', 'cov_next', 'S_hat', 'y_hat', 'likelihood', 'A', 'C', 'cov_next_pre'])        # outputs of casadi function
+                          ['mu_next', 'cov_next', 'S_hat', 'y_hat', 'likelihood', 'A', 'C', 'cov_next_pre', 'Q', 'tau_ext', 'tau_g'])   # outputs of casadi function
 
     #print(step_fn)
     return step_fn
@@ -69,6 +72,8 @@ class ekf():
         self.x['mu'] = res['mu_next']
         self.x['cov'] = res['cov_next']
         self.x['est_force'] = res['y_hat'][-self.nq:]
+        self.x['tau_ext'] = res['tau_ext']
+        self.x['tau_g'] = res['tau_g']
         return self.x
 
     def get_statedict(self):

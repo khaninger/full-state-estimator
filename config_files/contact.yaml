@@ -8,7 +8,7 @@ contact_1_pos:
 contact_1_stiff:
   - 0
   - 0
-  - 600
+  - 60000
 contact_1_rest:
   - 0.366
   - -0.528

@@ -22,7 +22,7 @@ class HybridParticleFilter:
 
 
         self.particles = []
-        self.num_particles = 30
+        self.num_particles = 50
         self.trans_matrix = np.array([[0.8, 0.2], [0.2, 0.8]])
         #self.belief_init = np.array([0.8, 0.2])
         #self.belief_free = 0.8
@@ -73,19 +73,23 @@ class HybridParticleFilter:
             self.S_t[i] = res['S_hat']
             self.y_hat[i] = res['y_hat']   # predicted measurements
             particle.weight = res['likelihood']
-
-            #print(particle.sampled_mode, particle.weight)
-            print(np.linalg.det(res['A']), particle.sampled_mode)
+            #print(res['tau_g'])
+            print(particle.sampled_mode, particle.weight)
+            #print(np.linalg.det(res['A']), particle.sampled_mode)
+            #print(res['A'].shape)
+            #print(np.linalg.det(res['Q']))
             #print(np.linalg.det(res['C']))
             #print(ca.det(res['C']))
             #print(self.particles)
             #print(np.linalg.det(res['cov_next_pre']), particle.sampled_mode)
-            #print(np.linalg.det(self.S_t[i]), particle.sampled_mode)
+            #print(np.all(np.linalg.eigvalsh(self.S_t[i])), particle.sampled_mode)
             #print(np.all(np.linalg.eigvalsh(self.S_t[i]) > 0))
             #print(particle.sampled_mode, particle.weight)
             #print(particle.sampled_mode, self.y_hat[i][-self.nq:])
             #print(particle.sampled_mode, particle.mu[:self.nq])
             #print(tau)
+            #print(self.y_hat[i].shape)
+            #print(self.step_fn[particle.sampled_mode])
             particle.mu_prev = particle.mu
             particle.Sigma_prev = particle.Sigma
             #print(particle.Sigma.shape)
@@ -122,9 +126,10 @@ class HybridParticleFilter:
 
     def estimate_state(self):
         pos = ca.DM(self.num_particles, self.nq)
-
+        est_force = ca.DM(self.num_particles, self.nq)
         weights = np.zeros(self.num_particles)
         cov = np.zeros([self.num_particles, 2*self.nq, 2*self.nq])
+
 
 
 
@@ -135,12 +140,15 @@ class HybridParticleFilter:
         for i, particle in enumerate(self.particles):
             #print(pos[i, :])
             #print(particle.mu[:6].shape)
-            pos[i,:] = particle.mu[:self.nq]
+            pos[i, :] = particle.mu[:self.nq]
+            est_force[i, :] = self.y_hat[i][-self.nq:]
+            #print(self.y_hat[i][-self.nq:])
             #print(particle.weight)
             weights[i] = particle.weight
-            vel[i,:] = particle.mu[-self.nq:]
+            vel[i ,:] = particle.mu[-self.nq:]
             cov[i] = particle.Sigma
         #print(weights.shape)
+        self.x['est_force'] = np.average(est_force, weights=weights, axis=0)
         self.x['mu'][:self.nq] = np.average(pos, weights=weights, axis=0)
         self.x["mu"][-self.nq:] = np.average(vel, weights=weights, axis=0)
         self.x["cov"] = np.average(cov, weights=weights, axis=0)
