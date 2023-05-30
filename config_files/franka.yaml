@@ -19,13 +19,13 @@ fric_model:
 h: 0.002 #0.033333  from publish rate of joint states, franka_control.launch
 proc_noise:
   q:
-    - 1e4
-    - 1e4
-    - 1e4
-    - 1e4
-    - 1e4
-    - 1e4
-    - 1e4
+    - 1e2
+    - 1e2
+    - 1e2
+    - 1e2
+    - 1e2
+    - 1e2
+    - 1e2
   dq:
     - 1e6
     - 1e6

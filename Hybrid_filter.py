@@ -74,7 +74,7 @@ class HybridParticleFilter:
             self.y_hat[i] = res['y_hat']   # predicted measurements
             particle.weight = res['likelihood']
             #print(res['tau_g'])
-            print(particle.sampled_mode, particle.weight)
+            #print(particle.sampled_mode, particle.weight)
             #print(np.linalg.det(res['A']), particle.sampled_mode)
             #print(res['A'].shape)
             #print(np.linalg.det(res['Q']))
@@ -152,6 +152,7 @@ class HybridParticleFilter:
         self.x['mu'][:self.nq] = np.average(pos, weights=weights, axis=0)
         self.x["mu"][-self.nq:] = np.average(vel, weights=weights, axis=0)
         self.x["cov"] = np.average(cov, weights=weights, axis=0)
+
         #print(self.x["cov"].shape)
 
     def MultinomialResample(self):

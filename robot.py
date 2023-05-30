@@ -105,10 +105,10 @@ class Robot():
         #tau = self.vars['tau']
         B = ca.diag(self.fric_model['visc'])
         #tau_err = tau - cpin.computeGeneralizedGravity(self.cmodel, self.cdata, q) # Difference between input torques and dynamics torques
-        tau_err = ca.DM.zeros(self.nq)  # Torques from dynamic error. We assume the dynamics torques are compensated by the inner controller 
+        #tau_err = ca.DM.zeros(self.nq)  # Torques from dynamic error. We assume the dynamics torques are compensated by the inner controller
 
         self.vars['tau_g'] = cpin.computeGeneralizedGravity(self.cmodel, self.cdata, self.vars['q'])  # gravitational torques
-        
+        tau_err = -self.vars['tau_g']
         M = cpin.crba(self.cmodel, self.cdata, q)+ca.diag(0.5*np.ones(self.nq))
         Mtilde_inv = ca.inv(M+h*B)
 
@@ -119,14 +119,14 @@ class Robot():
 
         dyn_fn_dict = {'xi': self.vars['xi']}
         obs_fn_dict = {'xi': self.vars['xi'],
-                       'tau': -self.vars['tau_i']+self.vars['tau_g']}
+                       'tau': -self.vars['tau_i']}
 
         dyn_fn_dict.update(opt_pars)
         obs_fn_dict.update(opt_pars)
 
         self.obs = ca.Function('obs', obs_fn_dict, ['xi', *opt_pars.keys()], ['tau'])
         self.vars['y'] = ca.vertcat(q, obs_fn_dict['tau'])
-        
+
         dq_next= dq + h*delta
         q_next = q + h*dq_next
         
@@ -150,12 +150,12 @@ class Robot():
         A[nq:nq2, nq:nq2] += h*ddelta_ddq
         A[nq:nq2, nq2:] += h*ddelta_dp
         dyn_fn_dict['A'] = A
-        self.A =  ca.Function('A', {k:dyn_fn_dict[k] for k in ('A', 'xi', *opt_pars.keys())},
+        self.A = ca.Function('A', {k:dyn_fn_dict[k] for k in ('A', 'xi', *opt_pars.keys())},
                                  ['xi', *opt_pars.keys()],['A'], self.jit_options).expand()
         #print(self.A)
         
         self.C_positions = np.hstack((np.eye(self.nq), np.zeros((self.nq, self.nx-self.nq))))   # previous constant observation matrix with only joint positions
-        C_tau = ca.jacobian(tau_i , self.vars['xi'])
+        C_tau = ca.jacobian(-tau_i, self.vars['xi'])
         dyn_fn_dict['C'] = ca.vertcat(self.C_positions, C_tau)  # build new observation matrix with joint positions and torques
         self.C_torques = ca.Function('C', {k: dyn_fn_dict[k] for k in ('C', 'xi', *opt_pars.keys())},
                              ['xi', *opt_pars.keys()], ['C'], self.jit_options).expand()  # build new casadi function for new observation matrix

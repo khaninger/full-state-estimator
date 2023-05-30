@@ -21,7 +21,7 @@ def build_step_fn(robot):
     N = robot.nq
     q_meas = ca.SX.sym('q_meas', robot.nq)  # joint positions measurements
     tau_meas = ca.SX.sym('tau_meas', robot.nq)  # joint torques measurements
-    y_meas = ca.vertcat(q_meas, tau_meas)  # stacked vector of measurements
+    y_meas = ca.vertcat(q_meas, tau_meas - tau_g)  # stacked vector of measurements
     cov = ca.SX.sym('cov', mu.shape[0], mu.shape[0])
 
     cov_next = A@cov@(A.T) + proc_noise
@@ -47,10 +47,10 @@ def build_step_fn(robot):
     #print(likelihood.shape)
     fn_dict = {'tau':tau_meas, 'mu':mu, 'cov':cov, 'q_meas':q_meas,
                'mu_next':mu_next_corr, 'cov_next':cov_next_corr, 'y_hat': y, 'S_hat': S_hat,
-               'likelihood': likelihood, 'A': A, 'C': C, 'cov_next_pre': cov_next, 'Q': Q, 'tau_ext': tau_i, 'tau_g': tau_g}
+               'likelihood': likelihood, 'A': A, 'C': C, 'cov_next_pre': cov_next, 'Q': Q, 'tau_ext': tau_i, 'tau_g': tau_g, 'y_meas': y_meas}
     step_fn = ca.Function('ekf_step', fn_dict,
                           ['tau', 'mu', 'cov', 'q_meas'], # inputs to casadi function
-                          ['mu_next', 'cov_next', 'S_hat', 'y_hat', 'likelihood', 'A', 'C', 'cov_next_pre', 'Q', 'tau_ext', 'tau_g'])   # outputs of casadi function
+                          ['mu_next', 'cov_next', 'S_hat', 'y_hat', 'likelihood', 'A', 'C', 'cov_next_pre', 'Q', 'tau_ext', 'tau_g', 'y_meas'])   # outputs of casadi function
 
     #print(step_fn)
     return step_fn
@@ -74,6 +74,7 @@ class ekf():
         self.x['est_force'] = res['y_hat'][-self.nq:]
         self.x['tau_ext'] = res['tau_ext']
         self.x['tau_g'] = res['tau_g']
+        self.x['y_meas'] = res['y_meas']
         return self.x
 
     def get_statedict(self):
