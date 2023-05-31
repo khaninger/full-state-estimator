@@ -22,7 +22,7 @@ class HybridParticleFilter:
 
 
         self.particles = []
-        self.num_particles = 50
+        self.num_particles = 100
         self.trans_matrix = np.array([[0.8, 0.2], [0.2, 0.8]])
         #self.belief_init = np.array([0.8, 0.2])
         #self.belief_free = 0.8
@@ -30,7 +30,7 @@ class HybridParticleFilter:
         #self.robot_dict = robot.param_dict
         self.N_eff = 0
         self.x = {'mu': robot['free-space'].xi_init, 'cov': robot['free-space'].cov_init,
-                  'belief_free': 0.5, 'belief_contact': 0.5}
+                  'belief_free': 0.6, 'belief_contact': 0.4}
         self.belief_init = np.array([self.x['belief_free'], self.x['belief_contact']])
         #print(self.x['mu'])
         self.proc_noise = robot['free-space'].proc_noise
@@ -41,6 +41,7 @@ class HybridParticleFilter:
 
         self.y_hat = np.zeros((self.num_particles, self.ny, 1))
         self.S_t = np.zeros((self.num_particles, self.ny, self.ny))
+        self.y_meas = np.zeros((self.num_particles, self.ny, 1))
         self.step_fn = {}
         self.modes_lst = list(robot.keys())  # getting the list of keys of robot dict, for mode sampling
         self.A = np.zeros((self.num_particles, self.nx, self.nx))
@@ -73,10 +74,13 @@ class HybridParticleFilter:
             self.S_t[i] = res['S_hat']
             self.y_hat[i] = res['y_hat']   # predicted measurements
             particle.weight = res['likelihood']
+            self.y_meas[i] = res['y_meas']
+            #print(self.y_meas[i])
             #print(res['tau_g'])
             #print(particle.sampled_mode, particle.weight)
             #print(np.linalg.det(res['A']), particle.sampled_mode)
             #print(res['A'].shape)
+            #print(np.linalg.det(self.S_t[i]))
             #print(np.linalg.det(res['Q']))
             #print(np.linalg.det(res['C']))
             #print(ca.det(res['C']))
@@ -108,6 +112,11 @@ class HybridParticleFilter:
             if particle.weight<1e-15:
 
                 particle.weight = sys.float_info.epsilon
+
+            if particle.sampled_mode == 'free-space':
+                particle.weight *= particle.mode[0]
+            elif particle.sampled_mode == 'contact':
+                particle.weight *= particle.mode[1]
             summation += particle.weight
         self.weightsum = 0
         for particle in self.particles:
@@ -152,6 +161,7 @@ class HybridParticleFilter:
         self.x['mu'][:self.nq] = np.average(pos, weights=weights, axis=0)
         self.x["mu"][-self.nq:] = np.average(vel, weights=weights, axis=0)
         self.x["cov"] = np.average(cov, weights=weights, axis=0)
+        self.x['y_meas'] = self.y_meas[0][-self.nq:]
 
         #print(self.x["cov"].shape)
 

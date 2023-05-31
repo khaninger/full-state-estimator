@@ -105,10 +105,10 @@ class Robot():
         #tau = self.vars['tau']
         B = ca.diag(self.fric_model['visc'])
         #tau_err = tau - cpin.computeGeneralizedGravity(self.cmodel, self.cdata, q) # Difference between input torques and dynamics torques
-        #tau_err = ca.DM.zeros(self.nq)  # Torques from dynamic error. We assume the dynamics torques are compensated by the inner controller
+        tau_err = ca.DM.zeros(self.nq)  # Torques from dynamic error. We assume the dynamics torques are compensated by the inner controller
 
         self.vars['tau_g'] = cpin.computeGeneralizedGravity(self.cmodel, self.cdata, self.vars['q'])  # gravitational torques
-        tau_err = -self.vars['tau_g']
+        #tau_err = -self.vars['tau_g']
         M = cpin.crba(self.cmodel, self.cdata, q)+ca.diag(0.5*np.ones(self.nq))
         Mtilde_inv = ca.inv(M+h*B)
 

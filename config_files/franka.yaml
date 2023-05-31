@@ -9,13 +9,13 @@ joint_names:
   - panda_joint7
 fric_model:
   visc:
-    - 50.4
-    - 50.4
-    - 50.4
-    - 50.4
-    - 50.4
-    - 50.4
-    - 50.4
+    - 30.4
+    - 30.4
+    - 30.4
+    - 30.4
+    - 30.4
+    - 30.4
+    - 30.4
 h: 0.002 #0.033333  from publish rate of joint states, franka_control.launch
 proc_noise:
   q:
@@ -27,13 +27,13 @@ proc_noise:
     - 1e2
     - 1e2
   dq:
-    - 1e6
-    - 1e6
-    - 1e6
-    - 1e6
-    - 1e6
-    - 1e6
-    - 1e6
+    - 1e4
+    - 1e4
+    - 1e4
+    - 1e4
+    - 1e4
+    - 1e4
+    - 1e4
   pos:
     - 1e1
     - 1e1
@@ -52,13 +52,13 @@ cov_init:
     - 1e-1
     - 1e-1
   dq:
-    - 1e6
-    - 1e6
-    - 1e6
-    - 1e6
-    - 1e6
-    - 1e6
-    - 1e6
+    - 1e5
+    - 1e5
+    - 1e5
+    - 1e5
+    - 1e5
+    - 1e5
+    - 1e5
   pos:
     - 1.5e6
     - 1.5e6
@@ -69,13 +69,13 @@ cov_init:
     - 6e15
 meas_noise:
   pos:
-    - 1e-3
-    - 1e-3
-    - 1e-3
-    - 1e-3
-    - 1e-3
-    - 1e-3
-    - 1e-3
+    - 1e-4
+    - 1e-4
+    - 1e-4
+    - 1e-4
+    - 1e-4
+    - 1e-4
+    - 1e-4
   torques:
     - 1e6
     - 1e6
