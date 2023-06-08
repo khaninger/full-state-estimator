@@ -144,11 +144,13 @@ class HybridParticleFilter:
 
 
         vel = ca.DM(self.num_particles, self.nq)
+        list_tuples = []
 
 
         for i, particle in enumerate(self.particles):
             #print(pos[i, :])
             #print(particle.mu[:6].shape)
+            list_tuples.append((particle.sampled_mode, particle.mu))    # creating the list of tuples to be returned for CEM
             pos[i, :] = particle.mu[:self.nq]
             est_force[i, :] = self.y_hat[i][-self.nq:]
             #print(self.y_hat[i][-self.nq:])
@@ -162,6 +164,7 @@ class HybridParticleFilter:
         self.x["mu"][-self.nq:] = np.average(vel, weights=weights, axis=0)
         self.x["cov"] = np.average(cov, weights=weights, axis=0)
         self.x['y_meas'] = self.y_meas[0][-self.nq:]
+        self.x['list_particles'] = list_tuples
 
         #print(self.x["cov"].shape)
 
