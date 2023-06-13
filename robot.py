@@ -32,6 +32,7 @@ class Robot():
         self.fric_model = par['fric_model']
 
         self.build_disc_dyn(par['h'], opt_pars)
+        self.disc_dyn_mpc(par['h'], opt_pars)
 
 
     def get_statedict(self, xi):
@@ -160,6 +161,44 @@ class Robot():
         self.C_torques = ca.Function('C', {k: dyn_fn_dict[k] for k in ('C', 'xi', *opt_pars.keys())},
                              ['xi', *opt_pars.keys()], ['C'], self.jit_options).expand()  # build new casadi function for new observation matrix
         #print(self.A.call({'xi': self.vars['xi']})['A'].shape)
+
+    def disc_dyn_mpc(self, h, opt_pars):
+        nq = self.nq
+        nq2 = 2 * self.nq
+        q = self.vars['q']
+        dq = self.vars['dq']
+        tau = self.vars['tau']  # input optimization variables
+        B = ca.diag(self.fric_model['visc'])
+        tau_err = tau - cpin.computeGeneralizedGravity(self.cmodel, self.cdata, q)  # Difference between input torques and dynamics torques
+        M = cpin.crba(self.cmodel, self.cdata, q) + ca.diag(0.5 * np.ones(self.nq))
+        Mtilde_inv = ca.inv(M + h * B)
+        tau_i = self.contact.get_contact_torque(q)  # get total estimated contact torque
+        delta = Mtilde_inv @ (-B @ dq + tau_err + tau_i)
+        dyn_mpc_dict = {'xi': self.vars['xi'],
+                        'tau': tau}
+        dyn_mpc_dict.update(opt_pars)
+        dq_next = dq + h * delta
+        q_next = q + h * dq_next
+        dyn_mpc_dict['xi_next'] = ca.vertcat(q_next, dq_next, dyn_mpc_dict['xi'][nq2:])
+        self.dyn_mpc = ca.Function('disc_dyn', dyn_mpc_dict,
+                                    ['xi', 'tau', *opt_pars.keys()],
+                                    ['xi_next'], self.jit_options).expand()
+
+    def create_rollout(self, H):
+        input_samples = ca.SX.sym('input_samples', self.nq, H)
+        xi = self.vars['xi']
+        rollout_dict = {'xi': xi,
+                        'input_samples': input_samples}
+        rollout_fn = self.dyn_mpc.mapaccum(H)
+        rollout = rollout_fn(self.vars['xi'], input_samples)
+
+        cost = ca.sumsqr(input_samples)
+        rollout_dict['cost'] = cost
+        rollout_dict['best_state_traj'] = rollout
+        roll_cost = ca.Function('roll_cost', rollout_dict,
+                                ['xi', 'input_samples'],
+                                ['cost', 'best_state_traj'])
+        return roll_cost
 
     def get_tcp_motion(self, q, dq):
         x = self.fwd_kin(q)
