@@ -15,34 +15,48 @@ class MpcPlanner:
         self.nq = self.robots['free-space'].nq
         self.constraint_slack = mpc_params['constraint_slack']
         self.modes = self.robots.keys()
-        self.disc_dyn = {mode: self.robots[mode].disc_dyn.map(self.H, 'serial') for mode in self.modes}
-        self.disc_rollouts = {mode: self.robots[mode].disc_dyn.mapaccum(self.H) for mode in self.modes}
+        self.disc_dyn_mpc = {mode: self.robots[mode].dyn_mpc.map(self.H, 'serial') for mode in self.modes}
+        self.rollouts = {mode: self.robots[mode].create_rollout.mapaccum(self.H) for mode in self.modes}
         self.beta = icem_params['beta']
         self.num_samples = icem_params['num_samples']
         self.alpha = icem_params['alpha']
-        self.dim_samples = icem_params['dim_samples']
+        self.dim_samples = icem_params['dim_samples']  # (nq,H)
         self.mu = np.zeros(self.dim_samples)
         self.std = np.zeros(self.dim_samples)
         self.u_min = icem_params['u_min']
         self.u_max = icem_params['u_max']
-        self.options = yaml_load(path, 'ipopt_params.yaml')
-        self.cost_eval = build_cost_eval()  # TO DO: write casadi function for evaluating the stage cost
+        self.options = yaml_load(path, 'ipopt_params.yaml')   # function for loading yaml files
+        self.num_iter = icem_params['num_iter']
+        self.num_elites = icem_params['elite_num']
+
 
 
     def iCEM_warmstart(self, params):
-        samples_noise = colorednoise.powerlaw_psd_gaussian(self.beta, size=(self.num_samples, self.nq, self.H))
-        samples = np.clip(samples_noise*self.std + self.mu, self.u_min, self.u_max)
-        x0 = params['']  # update initial setr of particles at each iteration --> should be a list of tuples
-        rollout = np.zeros((self.num_samples, self.nx, self.H))
-        cost = np.zeros((self.num_samples, 1))
-        for i in range(self.num_samples):
-            rollout[i] = self.disc_rollouts[x0[i][0]](x0[i][1], samples[i])
-            cost[i] = self.cost_eval(rollout[i], samples[i])
-        min_cost_index = np.argmin(cost, axis=0)
-        best_state_traj = rollout[min_cost_index].reshape(self.nx, self.H)
-        best_input_traj = samples[min_cost_index].reshape(self.nq, self.H)
+        mu = self.mu
+        std = self.std
+        for i in range(self.num_iter):
+            samples_noise = colorednoise.powerlaw_psd_gaussian(self.beta, size=(self.num_samples, self.nq, self.H))
+            samples = np.clip(samples_noise * self.std + self.mu, self.u_min, self.u_max)
+            x0 = params['list_particles']  # list of tuples with joint states and sampled mode for every particle
+            rollout = np.zeros((self.num_samples, self.nx, self.H))
+            cost = np.zeros(self.num_samples)
+            for j in range(self.num_samples):
+                rollout[j] = self.rollouts[x0[j][0]](x0[j][1], samples[j])[1]
+                cost[j] = self.rollouts[x0[j][0]](x0[j][1], samples[j])[0]
+            elite_indexes = np.argsort(cost)[:self.num_elites]
+            elite_samples = samples[elite_indexes]
+            new_mu = np.mean(elite_samples, axis=0)
+            new_std = np.std(elite_samples, axis=0)
+            mu = self.alpha*mu + (1-self.alpha)*new_mu
+            std = self.alpha * std + (1 - self.alpha) * new_std
+            best_state_traj = rollout[elite_indexes[0]].reshape(self.nx, self.H)
 
-        return best_state_traj, best_input_traj
+        return best_state_traj, mu
+
+
+
+
+
 
 
     def solve(self, params):
@@ -69,8 +83,7 @@ class MpcPlanner:
 
         # update mean of sampling distribution
         self.mu = self.vars['tau']
-        new_std = np.std(np.array((best_input, self.mu)), axis=0)
-        self.std = self.std*self.alpha + (1-self.alpha)*new_std
+        self.std = np.ones(self.dim_samples)  # re-initialize std to be ones at each time-step
 
     def build_solver(self, params):
         nx = self.nx
@@ -93,12 +106,10 @@ class MpcPlanner:
         # turn the decision variables into a decision_var object
         self.vars = decision_var_set(x0=vars, ub=ub, lb=lb, symb_type=ty.sym)
         for mode in self.modes:
-            Fk_next = self.disc_dyn[mode](x=self.vars['x_'+ mode],
-                                          u=self.vars['u'],
-                                          init_pose=params_sym['init_pose'])
+            dynamics = self.disc_dyn_mpc[mode](x=self.vars['x_'+ mode], u=self.vars['u'])
 
-            Xk_next = Fk_next['xf']
-            J[mode] += ca.sum2(Fk_next['st_cost'])
+            Xk_next = dynamics['xi_next']
+            J[mode] += ca.sum2(dynamics['st_cost'])
             g += [ca.reshape(params_init['xi_t'] - self.vars['xi_' + mode][:, 0], nx, 1)]
             g += [ca.reshape(Xk_next[:, :] - self.vars['xi_' + mode][:, :], nx * self.H, 1)]
             lbg += [self.constraint_slack] * nx * self.H

@@ -180,9 +180,10 @@ class Robot():
         dq_next = dq + h * delta
         q_next = q + h * dq_next
         dyn_mpc_dict['xi_next'] = ca.vertcat(q_next, dq_next, dyn_mpc_dict['xi'][nq2:])
+        dyn_mpc_dict['stage_cost'] = ca.sumsqr(q_next)  # write stage cost --> would be mapped across planning horizon in MPC module
         self.dyn_mpc = ca.Function('disc_dyn', dyn_mpc_dict,
                                     ['xi', 'tau', *opt_pars.keys()],
-                                    ['xi_next'], self.jit_options).expand()
+                                    ['xi_next', 'stage_cost'], self.jit_options).expand()
 
     def create_rollout(self, H):
         input_samples = ca.SX.sym('input_samples', self.nq, H)
@@ -190,14 +191,14 @@ class Robot():
         rollout_dict = {'xi': xi,
                         'input_samples': input_samples}
         rollout_fn = self.dyn_mpc.mapaccum(H)
-        rollout = rollout_fn(self.vars['xi'], input_samples)
+        rollout = rollout_fn(self.vars['xi'], input_samples)[0]
 
-        cost = ca.sumsqr(input_samples)
+        cost = ca.sumsqr(input_samples)  # write here complete cost for evaluating sample trajectories --> input dimensions (nq,H) for actions and (nx,H) for states
         rollout_dict['cost'] = cost
-        rollout_dict['best_state_traj'] = rollout
+        rollout_dict['rollout'] = rollout
         roll_cost = ca.Function('roll_cost', rollout_dict,
                                 ['xi', 'input_samples'],
-                                ['cost', 'best_state_traj'])
+                                ['cost', 'rollout'])
         return roll_cost
 
     def get_tcp_motion(self, q, dq):
