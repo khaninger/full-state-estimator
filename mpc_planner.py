@@ -16,7 +16,7 @@ class MpcPlanner:
         self.constraint_slack = mpc_params['constraint_slack']
         self.modes = self.robots.keys()
         self.disc_dyn_mpc = {mode: self.robots[mode].dyn_mpc.map(self.H, 'serial') for mode in self.modes}
-        self.rollouts = {mode: self.robots[mode].create_rollout.mapaccum(self.H) for mode in self.modes}
+        self.rollouts = {mode: self.robots[mode].create_rollout(self.H) for mode in self.modes}
         self.beta = icem_params['beta']
         self.num_samples = icem_params['num_samples']
         self.alpha = icem_params['alpha']
@@ -41,8 +41,8 @@ class MpcPlanner:
             rollout = np.zeros((self.num_samples, self.nx, self.H))
             cost = np.zeros(self.num_samples)
             for j in range(self.num_samples):
-                rollout[j] = self.rollouts[x0[j][0]](x0[j][1], samples[j])[1]
-                cost[j] = self.rollouts[x0[j][0]](x0[j][1], samples[j])[0]
+                cost[j], rollout[j] = self.rollouts[x0[j][0]](x0[j][1], samples[j])
+
             elite_indexes = np.argsort(cost)[:self.num_elites]
             elite_samples = samples[elite_indexes]
             new_mu = np.mean(elite_samples, axis=0)
