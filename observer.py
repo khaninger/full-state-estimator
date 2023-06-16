@@ -21,7 +21,7 @@ def build_step_fn(robot):
     N = robot.nq
     q_meas = ca.SX.sym('q_meas', robot.nq)  # joint positions measurements
     tau_meas = ca.SX.sym('tau_meas', robot.nq)  # joint torques measurements
-    y_meas = ca.vertcat(q_meas, tau_meas - tau_g )  # stacked vector of measurements
+    y_meas = ca.vertcat(q_meas, tau_meas)  # stacked vector of measurements
     cov = ca.SX.sym('cov', mu.shape[0], mu.shape[0])
 
     cov_next = A@cov@(A.T) + proc_noise

@@ -120,7 +120,7 @@ class Robot():
 
         dyn_fn_dict = {'xi': self.vars['xi']}
         obs_fn_dict = {'xi': self.vars['xi'],
-                       'tau': -self.vars['tau_i']}
+                       'tau': self.vars['tau_i']}
 
         dyn_fn_dict.update(opt_pars)
         obs_fn_dict.update(opt_pars)
@@ -156,7 +156,7 @@ class Robot():
         #print(self.A)
         
         self.C_positions = np.hstack((np.eye(self.nq), np.zeros((self.nq, self.nx-self.nq))))   # previous constant observation matrix with only joint positions
-        C_tau = ca.jacobian(-tau_i, self.vars['xi'])
+        C_tau = ca.jacobian(tau_i, self.vars['xi'])
         dyn_fn_dict['C'] = ca.vertcat(self.C_positions, C_tau)  # build new observation matrix with joint positions and torques
         self.C_torques = ca.Function('C', {k: dyn_fn_dict[k] for k in ('C', 'xi', *opt_pars.keys())},
                              ['xi', *opt_pars.keys()], ['C'], self.jit_options).expand()  # build new casadi function for new observation matrix
