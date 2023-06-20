@@ -57,7 +57,7 @@ class ros_observer():
             #print(self.x['mu'][:self.nq])
             #print(self.x['mu'][-self.nq:])
             #print('est_force')
-            print(self.x['est_force'])
+            #print(self.x['est_force'])
             #print('meas_force')
             #print(self.x['y_meas'][-self.nq:])
             #print(self.x['tau_g'])

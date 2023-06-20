@@ -89,7 +89,7 @@ class HybridParticleFilter:
             #print(np.all(np.linalg.eigvalsh(self.S_t[i])), particle.sampled_mode)
             #print(np.all(np.linalg.eigvalsh(self.S_t[i]) > 0))
             #print(particle.sampled_mode, particle.weight)
-            #print(particle.sampled_mode, self.y_hat[i][-self.nq:])
+            print(particle.sampled_mode, self.y_hat[i][-self.nq:])
             #print(particle.sampled_mode, particle.mu[:self.nq])
             #print(tau)
             #print(self.y_hat[i].shape)
