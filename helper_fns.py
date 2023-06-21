@@ -87,8 +87,6 @@ def map_franka_joint_state(msg):
         q.append(msg.position[ind])
         v.append(msg.velocity[ind])
         tau.append(msg.effort[ind])
-
-
     return q, v, tau
 
 

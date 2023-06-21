@@ -14,7 +14,6 @@ def build_step_fn(robot):
     mu = robot.vars['xi']
     mu_next = robot.vars['xi_next']
     tau_i = robot.vars['tau_i']  # expected contact torque
-    tau_g = robot.vars['tau_g']  # gravitational torques
     y = robot.vars['y']          # expected pos and torque observations 
 
     A, C = robot.get_linearized({'xi': mu})  # get linearized state and observation matrices wrt states
@@ -39,7 +38,6 @@ def build_step_fn(robot):
     det_S_t = ca.trace(R)  # determinant of original predicted measurement covariance is just the product of diagonal elements of R --> block triangular
     log_likelihood = -0.5 * (np.log(det_S_t) + ca.transpose(y_meas - y) @ ca.inv(S_hat) @ (y_meas - y) + N * np.log(2 * np.pi))
     temp1 = det_S_t**(-1/2)
-    #temp1 = 0.1
     temp2 = ca.exp(-0.5*ca.transpose(y_meas-y) @ ca.inv(S_hat) @ (y_meas-y))
     mu_next_corr = mu_next + L@(y_meas - y)
     cov_next_corr = (ca.SX.eye(robot.nx)-L@C)@cov_next # corrected covariance
@@ -47,7 +45,7 @@ def build_step_fn(robot):
     #print(likelihood.shape)
     fn_dict = {'tau':tau_meas, 'mu':mu, 'cov':cov, 'q_meas':q_meas,
                'mu_next':mu_next_corr, 'cov_next':cov_next_corr, 'y_hat': y, 'S_hat': S_hat,
-               'likelihood': likelihood, 'A': A, 'C': C, 'cov_next_pre': cov_next, 'Q': Q, 'tau_ext': tau_i, 'tau_g': tau_g, 'y_meas': y_meas}
+               'likelihood': likelihood, 'A': A, 'C': C, 'cov_next_pre': cov_next, 'Q': Q, 'tau_ext': tau_i, 'y_meas': y_meas}
     step_fn = ca.Function('ekf_step', fn_dict,
                           ['tau', 'mu', 'cov', 'q_meas'], # inputs to casadi function
                           ['mu_next', 'cov_next', 'S_hat', 'y_hat', 'likelihood', 'A', 'C', 'cov_next_pre', 'Q', 'tau_ext', 'tau_g', 'y_meas'])   # outputs of casadi function

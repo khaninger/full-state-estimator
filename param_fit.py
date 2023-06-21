@@ -43,7 +43,7 @@ def validate(states, torques, param, robot, num_pts = 3500):
         res_dyn = robot.disc_dyn.call(param)
         # loss += ca.norm_2(states[i+prediction_skip]-res['xi_next'])
         res_obs = robot.obs.call(param)
-        
+        #print(res_obs['tau'])
         state_err += ca.norm_2(states[i+1]-res_dyn['xi_next'])
         obs_err += ca.norm_2(torques[i]-res_obs['tau'])
 

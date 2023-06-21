@@ -85,7 +85,6 @@ class Robot():
         cpin.updateFramePlacement(self.cmodel, self.cdata, self.cmodel.getFrameId('fr3_link8'))
         ee = self.cdata.oMf[self.cmodel.getFrameId('fr3_link8')]
         self.fwd_kin =  ca.Function('p',[q],[ee.translation, ee.rotation])
-        #print(self.fwd_kin(np.array([-0.58, 0.54, -0.39, -1.83, 0.27, 2.35, -2.68])))
         self.x_ee = self.fwd_kin(q) # x is TCP pose as (pos, R), where pos is a 3-Vector and R a rotation matrix
     
         J = ca.jacobian(self.x_ee[0], q)
@@ -103,17 +102,18 @@ class Robot():
         nq2 = 2*self.nq
         q = self.vars['q']
         dq = self.vars['dq']
-        #tau = self.vars['tau']
+        
         B = ca.diag(self.fric_model['visc'])
-        #tau_err = tau - cpin.computeGeneralizedGravity(self.cmodel, self.cdata, q) # Difference between input torques and dynamics torques
+
+        #self.vars['tau_g'] = cpin.computeGeneralizedGravity(self.cmodel, self.cdata, self.vars['q'])  # gravitational torques
+        #tau_err = -self.vars['tau_g']
+
         tau_err = ca.DM.zeros(self.nq)  # Torques from dynamic error. We assume the dynamics torques are compensated by the inner controller
 
-        self.vars['tau_g'] = cpin.computeGeneralizedGravity(self.cmodel, self.cdata, self.vars['q'])  # gravitational torques
-        #tau_err = -self.vars['tau_g']
         M = cpin.crba(self.cmodel, self.cdata, q)+ca.diag(0.5*np.ones(self.nq))
         Mtilde_inv = ca.inv(M+h*B)
 
-        tau_i = self.contact.get_contact_torque(q)  # get total estimated contact torque
+        tau_i = -self.contact.get_contact_torque(q)  # get total estimated contact torque
         self.vars['tau_i'] = tau_i  # make contact torque an independent variable
 
         delta = Mtilde_inv@(-B@dq + tau_err + tau_i)

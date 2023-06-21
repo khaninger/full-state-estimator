@@ -137,7 +137,7 @@ def generate_traj(bag, est_pars = {}):
         res = observer.step(q = msgs['pos'][:,i], tau = msgs['torque'][:,i])
         toc = time.perf_counter()
         update_freq.append(1/(toc-tic))
-        #print(res['mu'][:6])
+        #print(msgs['torque'][:,i])
         statedict = observer.get_statedict()
         for k,v in statedict.items():
             results[k][:,[i]] = v
@@ -163,6 +163,8 @@ def param_fit(bag):
 
     states = np.vstack((results['q_m'], results['dq_m']))
     tau_ms = results['tau_m']
+    print(min(tau_ms[1,:]))
+    print(max(tau_ms[1,:]))
 
     p_to_opt = {}
     p_to_opt['contact_1_pos'] = ca.SX.sym('pos',3)
