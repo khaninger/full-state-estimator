@@ -92,6 +92,8 @@ class HybridParticleFilter:
             #print(particle.sampled_mode, self.y_hat[i][-self.nq:])
             #print(particle.sampled_mode, particle.mu[:self.nq])
             #print(tau)
+            #print(np.all(np.linalg.eigvalsh(particle.Sigma)>0), particle.sampled_mode)
+            #print(np.linalg.det(particle.Sigma), particle.sampled_mode)
             #print(self.y_hat[i].shape)
             #print(self.step_fn[particle.sampled_mode])
             particle.mu_prev = particle.mu

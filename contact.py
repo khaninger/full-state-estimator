@@ -5,6 +5,7 @@ class Contact():
     def __init__(self):
         self.contact_info = {} # contact displacement/point/force per contact model
         self.torques = {}      # contact torque per contact model
+        self.forces = {}       # contact force per contact model
         self.est_pars = {}     # symbolic parameters
         self.pars = {}         # all contact parameters
         self.np = 0            # dim of symbolic params
@@ -58,6 +59,7 @@ class Contact():
             res_dict[contact+'_disp'] = disp_i
             res_dict[contact+'_force'] = F_i
             self.torques[contact] = J_i.T@F_i
+            self.forces[contact] = F_i
         
         fn_dict.update(res_dict)
         self.contact_info = ca.Function(contact+'_info', fn_dict,
@@ -69,6 +71,11 @@ class Contact():
         for contact in self.contacts:
             tau += self.torques[contact]
         return tau
+    def get_contact_force(self, q):
+        force = 0
+        for contact in  self.contacts:
+            force += self.forces[contact]
+        return force
             
     def get_statedict(self, q, dq, sym_pars_vec):
         d = {'q':q}

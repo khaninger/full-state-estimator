@@ -26,6 +26,7 @@ def build_step_fn(robot):
     cov_next = A@cov@(A.T) + proc_noise
 
 
+
     L = cov_next@C.T@ca.inv(C@cov_next@(C.T) + meas_noise)  # calculate Kalman gain
 
     #print(L.shape)

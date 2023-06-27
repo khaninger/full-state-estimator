@@ -39,8 +39,8 @@ class ros_observer():
 
         print("Building observer")
         #self.observer = ekf(self.robots['free-space'])
-        #self.observer = ekf(self.robots['contact'])
-        self.observer = HybridParticleFilter(self.robots)
+        self.observer = ekf(self.robots['contact'])
+        #self.observer = HybridParticleFilter(self.robots)
         print("Observer ready to recieve msgs")
         
     def joint_callback(self, msg):
@@ -57,6 +57,7 @@ class ros_observer():
             #print(self.x['mu'][:self.nq])
             #print(self.x['mu'][-self.nq:])
             #print('est_force')
+            print(np.all(np.linalg.det(self.x['cov'])>0))
             #print(self.x['est_force'])
             #print('meas_force')
             #print(self.x['y_meas'][-self.nq:])
@@ -65,7 +66,7 @@ class ros_observer():
             #print(self.x['tau_ext'])
             #print(self.x['y_meas'][-self.nq:])
             #print(self.x['belief_free'], self.x['belief_contact'])
-            self.publish_state()
+            #self.publish_state()
 
     def observer_update(self):
         self.x = self.observer.step(q = self.q_m,
