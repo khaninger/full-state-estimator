@@ -33,6 +33,7 @@ class Robot():
 
         self.build_disc_dyn(par['h'], opt_pars)
         #self.disc_dyn_mpc(par['h'], opt_pars)
+        #self.trial(par['h'], opt_pars)
 
 
     def get_statedict(self, xi):
@@ -162,22 +163,24 @@ class Robot():
                              ['xi', *opt_pars.keys()], ['C'], self.jit_options).expand()  # build new casadi function for new observation matrix
         #print(self.A.call({'xi': self.vars['xi']})['A'].shape)
 
-    def disc_dyn_mpc(self, h, opt_pars, mpc_params):
+    def disc_dyn_mpc(self, h, opt_pars):
+        par = self.mpc_params  # parameters for mpc problem
+        N_p = self.mpc_params['N_p']  # dimensions of impedance model
         nq = self.nq
         nq2 = 2 * self.nq
         q = self.vars['q']
         dq = self.vars['dq']
-        imp_stiff = ca.SX.sym('imp_stiff', 3)
-        imp_damp = ca.SX.sym('imp_damp', 3)
-        imp_rest = ca.SX.sym('imp_rest', 3)
-        stiff_matrix = ca.diag(imp_stiff*np.ones(3))  # creating impedance stiffness matrix
+        imp_stiff = ca.SX.sym('imp_stiff', N_p)
+        imp_damp = 3*ca.sqrt(imp_stiff)
+        imp_rest = ca.SX.sym('imp_rest', np)  # desired pose in TCP frame
+        stiff_matrix = ca.diag(imp_stiff*np.ones(N_p))  # creating impedance stiffness matrix
         B = ca.diag(self.fric_model['visc'])
         M = cpin.crba(self.cmodel, self.cdata, q) + ca.diag(0.5 * np.ones(self.nq))
         Mtilde_inv = ca.inv(M + h * B)
         F_i = -self.contact.get_contact_force(q)  # get total estimated contact force
         jac = self.jac(q)  # jacobian
         x, dx = self.get_tcp_motion(q, dq)
-        delta = Mtilde_inv @ jac.T @ (F_i + imp_damp @ dx + stiff_matrix @ (x - imp_rest))
+        delta = Mtilde_inv @ jac.T @ (F_i + imp_damp @ dx + stiff_matrix @ (imp_rest - x))
         dyn_mpc_dict = {'xi': self.vars['xi'],
                         'imp_rest': imp_rest,
                         'imp_stiff': imp_stiff}
@@ -185,23 +188,58 @@ class Robot():
         dq_next = dq + h * delta
         q_next = q + h * dq_next
         dyn_mpc_dict['xi_next'] = ca.vertcat(q_next, dq_next, dyn_mpc_dict['xi'][nq2:])
-        dyn_mpc_dict['cost'] = mpc_params['ref_cost']*ca.sumsqr(mpc_params['q_ref'] - q_next) + mpc_params['control_cost']*ca.sumsqr(imp_stiff)  # write 1-step cost --> would be mapped across planning horizon in MPC module
+        dyn_mpc_dict['cost'] = par['ref_cost']*ca.sumsqr(imp_rest) + par['control_cost']*ca.sumsqr(imp_stiff)  # write 1-step cost --> would be mapped across planning horizon in MPC module
         self.dyn_mpc = ca.Function('disc_dyn', dyn_mpc_dict,
                                     ['xi', 'imp_stiff', 'imp_rest', *opt_pars.keys()],
                                     ['xi_next', 'cost'], self.jit_options).expand()
+    def trial(self, h, opt_pars):
+        """do not consider this method, used just for testing dimensions"""
+        nq = self.nq
+        nq2 = 2 * self.nq
+        q = self.vars['q']
+        dq = self.vars['dq']
+        tau = self.vars['tau']  # input optimization variables
+        par = ca.SX.sym('par', self.nq)
+        B = ca.diag(self.fric_model['visc'])
+        tau_err = tau - cpin.computeGeneralizedGravity(self.cmodel, self.cdata, q)  # Difference between input torques and dynamics torques
+        M = cpin.crba(self.cmodel, self.cdata, q) + ca.diag(0.5 * np.ones(self.nq))
+        Mtilde_inv = ca.inv(M + h * B)
+        tau_i = self.contact.get_contact_torque(q)  # get total estimated contact torque
+        delta = Mtilde_inv @ (-B @ dq + tau_err + tau_i + par)
+        dyn_mpc_dict = {'xi': self.vars['xi'],
+                        'tau': tau,
+                        'par': par}
+        dyn_mpc_dict.update(opt_pars)
+        dq_next = dq + h * delta
+        q_next = q + h * dq_next
+        dyn_mpc_dict['xi_next'] = ca.vertcat(q_next, dq_next, dyn_mpc_dict['xi'][nq2:])
+        dyn_mpc_dict['stage_cost'] = ca.sumsqr(q_next) + ca.sumsqr(tau) # write stage cost --> would be mapped across planning horizon in MPC module
+        self.dyn_mpc = ca.Function('disc_dyn', dyn_mpc_dict,
+                                   ['xi', 'tau', 'par', *opt_pars.keys()],
+                                   ['xi_next', 'stage_cost'], self.jit_options).expand()
 
-    def create_rollout(self, H, mpc_params):
-        input_samples = ca.SX.sym('input_samples', 3, H)
-        xi = self.vars['xi']
+
+    def create_rollout(self):
+        par = self.mpc_params
+        H = self.mpc_params['H']  # planning horizon
+        N_p = self.mpc_params['N_p']  # dimensions of impedance model
+        input_samples = ca.SX.sym('input_samples', N_p, H)  # tensor for action trajectories --> impedance stiffness
+        imp_rest = ca.SX.sym('imp_rest', N_p)  # desired pose in TCP frame
+        xi = self.vars['xi']  # joint states
         rollout_dict = {'xi': xi,
-                        'input_samples': input_samples}
+                        'input_samples': input_samples,
+                        'imp_rest': imp_rest}
         rollout_fn = self.dyn_mpc.mapaccum(H)
-        rollout = rollout_fn(self.vars['xi'], input_samples)[0]
-        cost = ca.sum2(rollout_fn   )  # write here complete cost for evaluating sample trajectories --> input dimensions (nq,H) for actions and (nx,H) for states
-        rollout_dict['cost'] = cost
+        step_args = {'xi': xi,
+                     'imp_stiff': input_samples,
+                     'imp_rest': imp_rest}
+        res = rollout_fn.call(step_args)
+        rollout = res['xi_next']
+        cost = res['cost']
+        rollout_dict['cost'] = ca.sum2(cost)
         rollout_dict['rollout'] = rollout
         roll_cost = ca.Function('roll_cost', rollout_dict,
-                                ['xi', 'input_samples'],
+                                ['xi', 'input_samples', 'imp_rest'],
                                 ['cost', 'rollout'])
         return roll_cost
 
