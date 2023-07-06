@@ -172,7 +172,8 @@ class Robot():
         dq = self.vars['dq']
         imp_stiff = ca.SX.sym('imp_stiff', N_p)
         imp_damp = 3*ca.sqrt(imp_stiff)
-        imp_rest = ca.SX.sym('imp_rest', np)  # desired pose in TCP frame
+        imp_rest = ca.SX.sym('imp_rest', np)
+        des_pose = ca.SX.sym('des_pose', np)
         stiff_matrix = ca.diag(imp_stiff*np.ones(N_p))  # creating impedance stiffness matrix
         B = ca.diag(self.fric_model['visc'])
         M = cpin.crba(self.cmodel, self.cdata, q) + ca.diag(0.5 * np.ones(self.nq))
@@ -188,9 +189,9 @@ class Robot():
         dq_next = dq + h * delta
         q_next = q + h * dq_next
         dyn_mpc_dict['xi_next'] = ca.vertcat(q_next, dq_next, dyn_mpc_dict['xi'][nq2:])
-        dyn_mpc_dict['cost'] = par['ref_cost']*ca.sumsqr(imp_rest) + par['control_cost']*ca.sumsqr(imp_stiff)  # write 1-step cost --> would be mapped across planning horizon in MPC module
+        dyn_mpc_dict['cost'] = par['ref_cost']*ca.sumsqr(des_pose - x) + par['control_cost']*ca.sumsqr(imp_rest)  # write 1-step cost --> would be mapped across planning horizon in MPC module
         self.dyn_mpc = ca.Function('disc_dyn', dyn_mpc_dict,
-                                    ['xi', 'imp_stiff', 'imp_rest', *opt_pars.keys()],
+                                    ['xi', 'imp_stiff', 'imp_rest', 'des_pose', *opt_pars.keys()],
                                     ['xi_next', 'cost'], self.jit_options).expand()
     def trial(self, h, opt_pars):
         """do not consider this method, used just for testing dimensions"""
@@ -223,23 +224,24 @@ class Robot():
         par = self.mpc_params
         H = self.mpc_params['H']  # planning horizon
         N_p = self.mpc_params['N_p']  # dimensions of impedance model
-        input_samples = ca.SX.sym('input_samples', N_p, H)  # tensor for action trajectories --> impedance stiffness
-        imp_rest = ca.SX.sym('imp_rest', N_p)  # desired pose in TCP frame
+        input_samples = ca.SX.sym('input_samples', N_p, H)  # tensor for action trajectories --> impedance rest position
+        imp_stiff = ca.SX.sym('imp_stiff', N_p)  # imp stiff in TCP frame
+        des_pose = self.mpc_params['des_pose']  # desired pose
         xi = self.vars['xi']  # joint states
         rollout_dict = {'xi': xi,
                         'input_samples': input_samples,
-                        'imp_rest': imp_rest}
+                        'imp_stiff': imp_stiff}
         rollout_fn = self.dyn_mpc.mapaccum(H)
         step_args = {'xi': xi,
-                     'imp_stiff': input_samples,
-                     'imp_rest': imp_rest}
+                     'imp_rest': input_samples,
+                     'imp_stiff': imp_stiff}
         res = rollout_fn.call(step_args)
         rollout = res['xi_next']
         cost = res['cost']
         rollout_dict['cost'] = ca.sum2(cost)
         rollout_dict['rollout'] = rollout
         roll_cost = ca.Function('roll_cost', rollout_dict,
-                                ['xi', 'input_samples', 'imp_rest'],
+                                ['xi', 'input_samples', 'imp_stiff'],
                                 ['cost', 'rollout'])
         return roll_cost
 

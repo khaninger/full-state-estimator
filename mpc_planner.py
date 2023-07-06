@@ -84,6 +84,7 @@ class MpcPlanner:
         nq = self.nq
         ty = ca.MX
         N_p = self.N_p
+        opt_imp = self.mpc_params['opt_imp']
 
         # initialize empty NLP
         J = 0  # objective function
@@ -93,18 +94,20 @@ class MpcPlanner:
         self.pars = param_set(params0, symb_type=ty.sym)
 
         # build decision variables
-        vars0['imp_stiff'] = self.pars['imp_stiff']  # imp stiff in tcp coord, initial value is current stiff
+        if opt_imp: vars0['imp_stiff'] = self.pars['imp_stiff']   # imp stiff in tcp coord, initial value is current stiff
+        vars0['imp_rest'] = np.zeros(N_p)
         for m in self.modes:
             vars0['q_' + m] = np.zeros((nx, self.H))  # joint trajectory relative to tcp
         ub, lb = self.build_dec_var_constraints()
         # turn the decision variables into a decision_var object
         self.vars = decision_var_set(x0=vars0, ub=ub, lb=lb, symb_type=ty.sym)
-        imp_stiff = self.vars['imp_stiff']
+        imp_stiff = self.vars['imp_stiff'] if opt_imp else self.pars['imp_stiff']
         self.build_constraints()
         for mode in self.modes:
             dyn_next = self.disc_dyn_mpc[mode](xi=self.vars['q_' + mode],
                                                imp_stiff=imp_stiff,
-                                               imp_rest=self.pars['imp_rest'])
+                                               imp_rest=self.vars['imp_rest'],
+                                               des_pose= self.pars['des_pose'])
 
             self.add_continuity_constraints(dyn_next['xi_next'], self.vars['q_' + mode])
             J += self.pars['belief_' + mode] * ca.sum2(dyn_next['cost'])

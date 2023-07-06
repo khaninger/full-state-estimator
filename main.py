@@ -103,7 +103,11 @@ def start_node(est_pars):
     rospy.init_node('observer')
     node = ros_observer(est_pars=est_pars)
     rospy.on_shutdown(node.shutdown)  # Set shutdown to be executed when ROS exits
-    rospy.spin()
+    #rospy.spin()
+    while not rospy.is_shutdown():
+        node.update_state_async()
+        node.control()
+        time.sleep(1e-8)  # Sleep so ROS subscribers can update
 
 def generate_traj(bag, est_pars = {}):
     print('Generating trajectory from {}'.format(bag))
