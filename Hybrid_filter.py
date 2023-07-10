@@ -205,7 +205,11 @@ class HybridParticleFilter:
 
 
     def get_statedict(self):
-        return {}
+        state_dict = {}
+        state_dict['mean_state'] = self.x['mu']
+        state_dict['list_particles'] = self.x['list_particles']
+
+        return state_dict
 
     def step(self, q, tau, F=None):
         self.propagate(q, tau, F=None)

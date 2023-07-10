@@ -4,11 +4,13 @@ from os.path import exists
 
 import numpy as np
 import rospy
+import tf2_ros as tf
 from sensor_msgs.msg import JointState
-from geometry_msgs.msg import WrenchStamped
+from geometry_msgs.msg import WrenchStamped, PoseStamped
 import casadi as ca
 from observer import ekf
 from Hybrid_filter import HybridParticleFilter
+from mpc_planner import MpcPlanner
 from robot import Robot, RobotDict
 from helper_fns import *
 from param_fit import *
@@ -17,20 +19,26 @@ from param_fit import *
 class ros_observer():
     """ This handles the ros interface, loads models, etc
     """
-    def __init__(self, joint_topic = 'joint_states',
+    def __init__(self, mpc_path, joint_topic = 'joint_states',
                        force_topic = 'wrench',
                        est_pars = {}):
-        
+        # loading configuration files for MPC
+        self.mpc_params = yaml_load(mpc_path, 'mpc_params.yaml')
+        self.icem_params = yaml_load(mpc_path, 'icem_params.yaml')
+        self.ipopt_options = yaml_load(mpc_path, 'ipopt_options.yaml')
+
         self.q_m = None        # measured joint position
         self.tau_m = None      # measured joint torque
         self.x = None          # observer state
 
+        self.tf_buffer = tf.Buffer()
+        self.tf_listener = tf.TransformListener(self.tf_buffer)
+
         self.joint_sub = rospy.Subscriber(joint_topic, JointState,
                                           self.joint_callback, queue_size=1)
-        self.joint_pub = rospy.Publisher('joint_states_obs',
+        self.joint_pub = rospy.Publisher('belief_obs',
                                          JointState, queue_size=1)
-        self.ee_pub = rospy.Publisher('tcp_obs',
-                                      JointState, queue_size=1)
+        self.imp_rest_pub = rospy.Publisher('cartesian_impedance_example_controller/equilibrium_pose', PoseStamped, queue_size = 1)  # impedance rest point publisher
 
         self.robots = RobotDict("config_files/franka.yaml", ["config_files/contact.yaml", "config_files/free_space.yaml"], est_pars).param_dict
         self.ny = self.robots['free-space'].ny
@@ -42,7 +50,24 @@ class ros_observer():
         #self.observer = ekf(self.robots['contact'])
         self.observer = HybridParticleFilter(self.robots)
         print("Observer ready to recieve msgs")
-        
+
+        # set up robot state and MPC state
+        self.rob_state = {}
+        self.mpc_state = {}
+        self.rob_state['imp_stiff'] = self.mpc_params['imp_stiff']
+        self.rob_state['des_pose'] = self.mpc_params['des_pose']  # this is the desired pose for stage cost tracking term
+        self.rob_state.update(self.observer.get_statedict())
+        # init MPC
+        self.mpc = MpcPlanner(mpc_params=self.mpc_params,
+                              icem_params=self.icem_params,
+                              ipopt_options=self.ipopt_options)
+
+        self.init_orientation = self.tf_buffer.lookup_transform('panda_link0', 'panda_EE', rospy.Time(0),
+                                                                rospy.Duration(1)).transform.rotation
+
+        # Performance profiling
+        self.timelist = []
+
     def joint_callback(self, msg):
         """ To be called when the joint_state topic is published with joint position and torques """
         try:
@@ -66,14 +91,14 @@ class ros_observer():
             #print(self.x['tau_ext'])
             #print(self.x['y_meas'][-self.nq:])
             #print(self.x['belief_free'], self.x['belief_contact'])
-            self.publish_state()
+            self.publish_belief()
 
     def observer_update(self):
         self.x = self.observer.step(q = self.q_m,
                                     tau = self.tau_m)
 
 
-    def publish_state(self):
+    def publish_belief(self):
         #ddq = self.x.get('ddq', np.zeros(self.observer.nq))
         #msg = build_jt_msg(self.x['q'], self.x['dq'],
                            #np.concatenate((self.x.get('stiff',[]), self.x.get('cont_pt', []))))
@@ -96,7 +121,33 @@ class ros_observer():
         #msg_ee = build_jt_msg(x[0].full(), dx.full(), ddx.full())
         #if not rospy.is_shutdown():
             #self.ee_pub.publish(msg_ee)
-    def shutdown(self):
+
+    def publish_imp_rest(self):
+        des_pose_w = compliance_to_world(self.rob_state['pose'], self.mpc_state['des_pose'], only_position=True)
+        msg_imp_xd = get_pose_msg(position=des_pose_w, frame_id='panda_link0')
+        msg_imp_xd.pose.orientation = self.init_orientation
+        if not rospy.is_shutdown():
+            self.imp_rest_pub.publish(msg_imp_xd)
+
+    def control(self):
+        if any(el is None for el in self.rob_state.values()) or rospy.is_shutdown(): return
+
+        # MPC calc
+        # Build parameters dictionary for the MPC problem
+        params = self.rob_state
+        params.update(self.observer.get_statedict())
+
+        start = time.time()
+        self.mpc_state = self.mpc.solve(params)
+        self.timelist.append(time.time() - start)
+
+        # print(self.mpc_state['x_peg1'])
+        if self.mpc_params['print_control']: self.print_results()
+
+        self.publish_imp_rest()
+
+
+def shutdown(self):
         print("Shutting down observer")
 
 def start_node(est_pars):

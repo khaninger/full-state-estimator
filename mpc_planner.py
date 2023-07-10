@@ -6,7 +6,7 @@ from decision_vars import *
 
 
 class MpcPlanner:
-    def __init__(self, mpc_params, icem_params, path):
+    def __init__(self, mpc_params, icem_params, ipopt_options):
         self.mpc_params = mpc_params  # mpc parameters
         self.H = mpc_params['planning_horizon']  # number of mpc steps
         self.dt = mpc_params['dt']  # sampling time
@@ -26,7 +26,7 @@ class MpcPlanner:
         self.std = np.zeros(self.dim_samples)
         self.u_min = icem_params['u_min']
         self.u_max = icem_params['u_max']
-        self.options = yaml_load(path, 'ipopt_params.yaml')   # function for loading yaml files
+        self.options = ipopt_options
         self.num_iter = icem_params['num_iter']
         self.num_elites = icem_params['elite_num']
 
@@ -40,10 +40,11 @@ class MpcPlanner:
             samples = np.clip(samples_noise * self.std + self.mu, self.u_min, self.u_max)
             x0 = params['list_particles']  # list of tuples with joint states and sampled mode for every particle
             des_pose = params['des_pose']
+            imp_stiff = params['imp_stiff']
             rollout = np.zeros((self.num_samples, self.nx, self.H))
             cost = np.zeros(self.num_samples)
             for j in range(self.num_samples):
-                cost[j], rollout[j] = self.rollouts[x0[j][0]](x0[j][1], samples[j], des_pose)
+                cost[j], rollout[j] = self.rollouts[x0[j][0]](x0[j][1], samples[j], imp_stiff, des_pose)
 
             elite_indexes = np.argsort(cost)[:self.num_elites]
             elite_samples = samples[elite_indexes]
@@ -79,6 +80,8 @@ class MpcPlanner:
         self.mu = self.vars['tau']
         self.std = np.ones(self.dim_samples)  # re-initialize std to be ones at each time-step
 
+        return self.vars.get_dec_dict()
+
     def build_solver(self, params0):
         nx = self.nx
         nq = self.nq
@@ -105,9 +108,9 @@ class MpcPlanner:
         self.build_constraints()
         for mode in self.modes:
             dyn_next = self.disc_dyn_mpc[mode](xi=self.vars['q_' + mode],
-                                               imp_stiff=imp_stiff,
                                                imp_rest=self.vars['imp_rest'],
-                                               des_pose= self.pars['des_pose'])
+                                               imp_stiff=imp_stiff,
+                                               des_pose=self.pars['des_pose'])
 
             self.add_continuity_constraints(dyn_next['xi_next'], self.vars['q_' + mode])
             J += self.pars['belief_' + mode] * ca.sum2(dyn_next['cost'])
