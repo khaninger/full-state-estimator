@@ -31,9 +31,10 @@ class Robot():
 
         self.fric_model = par['fric_model']
 
-        self.build_disc_dyn(par['h'], opt_pars)
-        #self.disc_dyn_mpc(par['h'], opt_pars)
+        self.build_disc_dyn(par['h'], opt_pars)   # build disc dyn for filter
+        self.disc_dyn_mpc(par['h'], opt_pars)     # build disc dyn for mpc
         #self.trial(par['h'], opt_pars)
+
 
 
     def get_statedict(self, xi):
@@ -85,7 +86,7 @@ class Robot():
         cpin.forwardKinematics(self.cmodel, self.cdata, q, dq, ddq)
         cpin.updateFramePlacement(self.cmodel, self.cdata, self.cmodel.getFrameId('fr3_link8'))
         ee = self.cdata.oMf[self.cmodel.getFrameId('fr3_link8')]
-        self.fwd_kin =  ca.Function('p',[q],[ee.translation, ee.rotation])
+        self.fwd_kin = ca.Function('p',[q],[ee.translation, ee.rotation])
         self.x_ee = self.fwd_kin(q) # x is TCP pose as (pos, R), where pos is a 3-Vector and R a rotation matrix
     
         J = ca.jacobian(self.x_ee[0], q)
@@ -164,8 +165,8 @@ class Robot():
         #print(self.A.call({'xi': self.vars['xi']})['A'].shape)
 
     def disc_dyn_mpc(self, h, opt_pars):
-        par = self.mpc_params  # parameters for mpc problem
-        N_p = par['N_p']  # dimensions of impedance model
+        #par = self.mpc_params  # parameters for mpc problem
+        N_p = 3  # dimensions of impedance model
         nq = self.nq
         nq2 = 2 * self.nq
         q = self.vars['q']
@@ -175,13 +176,17 @@ class Robot():
         imp_rest = ca.SX.sym('imp_rest', N_p)
         des_pose = ca.SX.sym('des_pose', N_p)
         stiff_matrix = ca.diag(imp_stiff*np.ones(N_p))  # creating impedance stiffness matrix
+        damp_matrix = ca.diag(imp_damp*np.ones(N_p))    # creating damping matrix
         B = ca.diag(self.fric_model['visc'])
         M = cpin.crba(self.cmodel, self.cdata, q) + ca.diag(0.5 * np.ones(self.nq))
         Mtilde_inv = ca.inv(M + h * B)
         F_i = -self.contact.get_contact_force(q)  # get total estimated contact force
         jac = self.jac(q)  # jacobian
+        #print(stiff_matrix.shape)
         x, dx = self.get_tcp_motion(q, dq)
-        delta = Mtilde_inv @ jac.T @ (F_i + imp_damp @ dx + stiff_matrix @ (imp_rest - x))
+
+        #print(x[0].shape)
+        delta = Mtilde_inv @ jac.T @ (F_i + damp_matrix @ dx + stiff_matrix @ (imp_rest - x[0]))
         dyn_mpc_dict = {'xi': self.vars['xi'],
                         'imp_rest': imp_rest,
                         'imp_stiff': imp_stiff,
@@ -190,7 +195,7 @@ class Robot():
         dq_next = dq + h * delta
         q_next = q + h * dq_next
         dyn_mpc_dict['xi_next'] = ca.vertcat(q_next, dq_next, dyn_mpc_dict['xi'][nq2:])
-        dyn_mpc_dict['cost'] = par['ref_cost']*ca.sumsqr(des_pose - x) + par['control_cost']*ca.sumsqr(imp_rest - x)  # write 1-step cost --> would be mapped across planning horizon in MPC module
+        dyn_mpc_dict['cost'] = 0.8*ca.sumsqr(des_pose - x[0]) + 0.2*ca.sumsqr(imp_rest - x[0])  # write 1-step cost --> would be mapped across planning horizon in MPC module
         self.dyn_mpc = ca.Function('disc_dyn', dyn_mpc_dict,
                                     ['xi', 'imp_rest', 'imp_stiff', 'des_pose', *opt_pars.keys()],
                                     ['xi_next', 'cost'], self.jit_options).expand()
@@ -215,16 +220,17 @@ class Robot():
         dq_next = dq + h * delta
         q_next = q + h * dq_next
         dyn_mpc_dict['xi_next'] = ca.vertcat(q_next, dq_next, dyn_mpc_dict['xi'][nq2:])
+
         dyn_mpc_dict['stage_cost'] = ca.sumsqr(q_next) + ca.sumsqr(tau) # write stage cost --> would be mapped across planning horizon in MPC module
         self.dyn_mpc = ca.Function('disc_dyn', dyn_mpc_dict,
                                    ['xi', 'tau', 'par', *opt_pars.keys()],
                                    ['xi_next', 'stage_cost'], self.jit_options).expand()
 
 
-    def create_rollout(self):
-        par = self.mpc_params
-        H = par['H']  # planning horizon
-        N_p = par['N_p']  # dimensions of impedance model
+    def create_rollout(self, H):
+        #par = self.mpc_params
+
+        N_p = 3 # dimensions of impedance model
         input_samples = ca.SX.sym('input_samples', N_p, H)  # tensor for action trajectories --> impedance rest position
         imp_stiff = ca.SX.sym('imp_stiff', N_p)  # imp stiff in TCP frame
         des_pose = ca.SX.sym('des_pose', N_p)  # desired pose
@@ -244,7 +250,7 @@ class Robot():
         rollout_dict['cost'] = ca.sum2(cost)
         rollout_dict['rollout'] = rollout
         roll_cost = ca.Function('roll_cost', rollout_dict,
-                                ['xi', 'input_samples', 'imp_stiff', 'des_pose'],
+                                ['xi', 'imp_rest', 'imp_stiff', 'des_pose'],
                                 ['cost', 'rollout'])
         return roll_cost
 

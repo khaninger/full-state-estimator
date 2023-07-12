@@ -1,0 +1,10 @@
+beta: 0.2     # noise tuning parameter
+num_samples: 80   # number of samples for action trajectories --> same of number of filter particles
+alpha: 0.02     # tuning parameter for distribution fitting
+N_p: 3         # dimension of impedance
+H: 6           # planning horizon
+dim_samples: (N_p, H)     # dimension of samples
+u_min: -1   # lower bound on actions
+u_max: 1    # upper bound on actions
+num_iter: 10  # number of iterations for iCEM
+elite_num: 4    # number of elite samples

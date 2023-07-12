@@ -1,0 +1,39 @@
+#### COST FUNCTION PARAMETERS  ####
+
+
+vel_cost: 0    # Velocity cost
+
+delta_xd_cost: 0.0001  # cost on imp stiffness displacement
+delta_xd_max: 0.15 # maximum displacement of imp spring
+
+
+delta_K_max: 10
+delta_K_cost: 0.1
+K_min: 0.001
+K_max: 400
+K_cost: 0.000
+
+imp_stiff:
+  - 40
+  - 40
+  - 40
+#### desired pose in cartesian space --> desired point
+des_pose:
+  - 0
+  - 0
+  - 0
+#### MPC Problem ####
+
+enable_rotation: false
+
+
+mpc_pts: 13
+N_p: 3                       # dimension of impedance
+dt: 0.1                      # sampling time
+H: 7                         # planning horizon
+constraint_slack: 0.0
+bound_relax_factor: 1e-6
+
+print_control: true
+
+

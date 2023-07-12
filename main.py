@@ -5,6 +5,7 @@ from os.path import exists
 import numpy as np
 import rospy
 import tf2_ros as tf
+import dynamic_reconfigure.client
 from sensor_msgs.msg import JointState
 from geometry_msgs.msg import WrenchStamped, PoseStamped
 import casadi as ca
@@ -19,10 +20,8 @@ from param_fit import *
 class ros_observer():
     """ This handles the ros interface, loads models, etc
     """
-    def __init__(self, mpc_path, joint_topic = 'joint_states',
-                       force_topic = 'wrench',
-                       est_pars = {}):
-        # loading configuration files for MPC
+    def __init__(self, mpc_path, joint_topic = 'joint_states', est_pars = {}):
+        # loading configuration files for MPC problem
         self.mpc_params = yaml_load(mpc_path, 'mpc_params.yaml')
         self.icem_params = yaml_load(mpc_path, 'icem_params.yaml')
         self.ipopt_options = yaml_load(mpc_path, 'ipopt_options.yaml')
@@ -38,7 +37,7 @@ class ros_observer():
                                           self.joint_callback, queue_size=1)
         self.joint_pub = rospy.Publisher('belief_obs',
                                          JointState, queue_size=1)
-        self.imp_rest_pub = rospy.Publisher('cartesian_impedance_example_controller/equilibrium_pose', PoseStamped, queue_size = 1)  # impedance rest point publisher
+        self.imp_rest_pub = rospy.Publisher('cartesian_impedance_example_controller/equilibrium_pose', PoseStamped, queue_size=1)  # impedance rest point publisher
 
         self.robots = RobotDict("config_files/franka.yaml", ["config_files/contact.yaml", "config_files/free_space.yaml"], est_pars).param_dict
         self.ny = self.robots['free-space'].ny
@@ -54,14 +53,14 @@ class ros_observer():
         # set up robot state and MPC state
         self.rob_state = {}
         self.mpc_state = {}
-        self.rob_state['imp_stiff'] = self.mpc_params['imp_stiff']
+        #self.rob_state['imp_stiff'] = self.mpc_params['imp_stiff']
         self.rob_state['des_pose'] = self.mpc_params['des_pose']  # this is the desired pose for stage cost tracking term
         self.rob_state.update(self.observer.get_statedict())
         # init MPC
         self.mpc = MpcPlanner(mpc_params=self.mpc_params,
                               icem_params=self.icem_params,
                               ipopt_options=self.ipopt_options)
-
+        self.par_client = dynamic_reconfigure.client.Client( "/cartesian_impedance_example_controller/dynamic_reconfigure_compliance_param_node")
         self.init_orientation = self.tf_buffer.lookup_transform('panda_link0', 'panda_EE', rospy.Time(0),
                                                                 rospy.Duration(1)).transform.rotation
 
@@ -123,11 +122,21 @@ class ros_observer():
             #self.ee_pub.publish(msg_ee)
 
     def publish_imp_rest(self):
-        des_pose_w = compliance_to_world(self.rob_state['pose'], self.mpc_state['des_pose'], only_position=True)
-        msg_imp_xd = get_pose_msg(position=des_pose_w, frame_id='panda_link0')
+        action_to_execute = self.mpc_state['imp_rest'][:, 0]  # mpc solver returns the complete action sequence, need to pick first element
+        des_pose_w = compliance_to_world(self.rob_state['pose'], action_to_execute, only_position=True)
+        msg_imp_xd = get_pose_msg(position=des_pose_w, frame_id='panda_link0')    # get desired rest pose in world frame
         msg_imp_xd.pose.orientation = self.init_orientation
         if not rospy.is_shutdown():
             self.imp_rest_pub.publish(msg_imp_xd)
+
+    def update_state_async(self):
+        pose_msg = self.tf_buffer.lookup_transform('panda_link0', 'panda_EE', rospy.Time(0), rospy.Duration(0.05))
+        self.rob_state['pose'] = msg_to_state(pose_msg)
+
+        imp_pars = self.par_client.get_configuration()   # set impedance stiffness values
+        self.rob_state['imp_stiff'] = np.array((imp_pars['translational_stiffness_x'],
+                                                imp_pars['translational_stiffness_y'],
+                                                imp_pars['translational_stiffness_z']))
 
     def control(self):
         if any(el is None for el in self.rob_state.values()) or rospy.is_shutdown(): return
@@ -140,20 +149,18 @@ class ros_observer():
         start = time.time()
         self.mpc_state = self.mpc.solve(params)
         self.timelist.append(time.time() - start)
-
-        # print(self.mpc_state['x_peg1'])
-        if self.mpc_params['print_control']: self.print_results()
-
-        self.publish_imp_rest()
+        self.publish_imp_rest()  # publish impedance optimized rest pose --> to be sen to franka impedance interface
 
 
-def shutdown(self):
+
+    def shutdown(self):
         print("Shutting down observer")
 
-def start_node(est_pars):
+def start_node(mpc_path, est_pars):
     rospy.init_node('observer')
-    node = ros_observer(est_pars=est_pars)
+    node = ros_observer(mpc_path=mpc_path, est_pars=est_pars)
     rospy.on_shutdown(node.shutdown)  # Set shutdown to be executed when ROS exits
+    rospy.sleep(1e-1)  # Sleep so ROS can init
     #rospy.spin()
     while not rospy.is_shutdown():
         node.update_state_async()

@@ -8,27 +8,28 @@ from decision_vars import *
 class MpcPlanner:
     def __init__(self, mpc_params, icem_params, ipopt_options):
         self.mpc_params = mpc_params  # mpc parameters
-        self.H = mpc_params['planning_horizon']  # number of mpc steps
-        self.dt = mpc_params['dt']  # sampling time
+        self.icem_params = icem_params
+        self.H = self.mpc_params['planning_horizon']  # number of mpc steps
+        self.dt = self.mpc_params['dt']  # sampling time
         self.robots = RobotDict("config_files/franka.yaml", ["config_files/contact.yaml", "config_files/free_space.yaml"], {}).param_dict
         self.nx = self.robots['free-space'].nx
         self.nq = self.robots['free-space'].nq
-        self.N_p = mpc_params['N_p']  # dimensions of impedance
-        self.constraint_slack = mpc_params['constraint_slack']
+        self.N_p = self.mpc_params['N_p']  # dimensions of impedance
+        self.constraint_slack = self.mpc_params['constraint_slack']
         self.modes = self.robots.keys()
         self.disc_dyn_mpc = {mode: self.robots[mode].dyn_mpc for mode in self.modes}  # for constructing overall cost
         self.rollouts = {mode: self.robots[mode].create_rollout for mode in self.modes}  # for rolling out trajectories in CEM
-        self.beta = icem_params['beta']
-        self.num_samples = icem_params['num_samples']
-        self.alpha = icem_params['alpha']
-        self.dim_samples = icem_params['dim_samples']  # (nq,H)
+        self.beta = self.icem_params['beta']
+        self.num_samples = self.icem_params['num_samples']
+        self.alpha = self.icem_params['alpha']
+        self.dim_samples = self.icem_params['dim_samples']  # (nq,H)
         self.mu = np.zeros(self.dim_samples)
         self.std = np.zeros(self.dim_samples)
-        self.u_min = icem_params['u_min']
-        self.u_max = icem_params['u_max']
+        self.u_min = self.icem_params['u_min']
+        self.u_max = self.icem_params['u_max']
         self.options = ipopt_options
-        self.num_iter = icem_params['num_iter']
-        self.num_elites = icem_params['elite_num']
+        self.num_iter = self.icem_params['num_iter']
+        self.num_elites = self.icem_params['elite_num']
 
 
 
@@ -66,7 +67,7 @@ class MpcPlanner:
         # warm start nlp with iCEM
         best_traj, best_input = self.iCEM_warmstart(params)
         self.vars.set_x0('xi', best_traj)
-        self.vars.set_x0('tau', best_input)
+        self.vars.set_x0('imp_rest', best_input)
         self.args['x0'] = self.vars.get_x0()
 
         sol = self.solver(**self.args)
@@ -77,17 +78,17 @@ class MpcPlanner:
 
         self.vars.set_results(sol['x'])
         # update mean of sampling distribution
-        self.mu = self.vars['tau']
+        self.mu = self.vars['imp_rest']
         self.std = np.ones(self.dim_samples)  # re-initialize std to be ones at each time-step
 
-        return self.vars.get_dec_dict()
+        return self.vars.filter()    # return dictionary of decision variables
 
     def build_solver(self, params0):
         nx = self.nx
         nq = self.nq
         ty = ca.MX
         N_p = self.N_p
-        opt_imp = self.mpc_params['opt_imp']
+        #opt_imp = self.mpc_params['opt_imp']
 
         # initialize empty NLP
         J = 0  # objective function
@@ -97,14 +98,14 @@ class MpcPlanner:
         self.pars = param_set(params0, symb_type=ty.sym)
 
         # build decision variables
-        if opt_imp: vars0['imp_stiff'] = self.pars['imp_stiff']   # imp stiff in tcp coord, initial value is current stiff
+        #if opt_imp: vars0['imp_stiff'] = self.pars['imp_stiff']   # imp stiff in tcp coord, initial value is current stiff
         vars0['imp_rest'] = np.zeros(N_p)
         for m in self.modes:
             vars0['q_' + m] = np.zeros((nx, self.H))  # joint trajectory relative to tcp
         ub, lb = self.build_dec_var_constraints()
         # turn the decision variables into a decision_var object
         self.vars = decision_var_set(x0=vars0, ub=ub, lb=lb, symb_type=ty.sym)
-        imp_stiff = self.vars['imp_stiff'] if opt_imp else self.pars['imp_stiff']
+        imp_stiff = self.pars['imp_stiff']
         self.build_constraints()
         for mode in self.modes:
             dyn_next = self.disc_dyn_mpc[mode](xi=self.vars['q_' + mode],
