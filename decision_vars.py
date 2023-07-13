@@ -190,6 +190,13 @@ class param_set:
             s += "{}:\n: {}\n".format(key, self[key])
         return s
 
+    def update(self, num):
+        for k, v in num.items():
+            self.__vars[k] = v
+        return vectorize(self.__vars)
+
+
+
     def get_vector(self):
         return vectorize(self.__vars)
 

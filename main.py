@@ -112,6 +112,7 @@ class ros_observer():
         if not rospy.is_shutdown():
 
             self.joint_pub.publish(msg_belief)
+
             #self.joint_pub.publish(msg)
             #self.joint_pub.publish(msg_tau_i)
             #self.ee_pub.publish(msg_ee)
@@ -160,12 +161,12 @@ def start_node(mpc_path, est_pars):
     rospy.init_node('observer')
     node = ros_observer(mpc_path=mpc_path, est_pars=est_pars)
     rospy.on_shutdown(node.shutdown)  # Set shutdown to be executed when ROS exits
-    rospy.sleep(1e-1)  # Sleep so ROS can init
+    rospy.sleep(1e1)  # Sleep so ROS can init
     #rospy.spin()
     while not rospy.is_shutdown():
         node.update_state_async()
         node.control()
-        time.sleep(1e-8)  # Sleep so ROS subscribers can update
+        time.sleep(1e2)  # Sleep so ROS subscribers can update
 
 def generate_traj(bag, est_pars = {}):
     print('Generating trajectory from {}'.format(bag))

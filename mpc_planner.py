@@ -99,6 +99,7 @@ class MpcPlanner:
 
         # build decision variables
         #if opt_imp: vars0['imp_stiff'] = self.pars['imp_stiff']   # imp stiff in tcp coord, initial value is current stiff
+        vars0['imp_stiff'] = self.pars['imp_stiff']
         vars0['imp_rest'] = np.zeros(N_p)
         for m in self.modes:
             vars0['q_' + m] = np.zeros((nx, self.H))  # joint trajectory relative to tcp
@@ -114,13 +115,15 @@ class MpcPlanner:
                                                des_pose=self.pars['des_pose'])
 
             self.add_continuity_constraints(dyn_next['xi_next'], self.vars['q_' + mode])
+            #print(dyn_next['xi_next'])
             J += self.pars['belief_' + mode] * ca.sum2(dyn_next['cost'])
+            print(J)
 
         # set up dictionary of arguments to solve
         x, lbx, ubx, x0 = self.vars.get_dec_vectors()
 
         self.args = dict(x0=x0, lbx=lbx, ubx=ubx, lbg=self.lbg, ubg=self.ubg)
-        prob = dict(f=J, x=x, g=ca.vertcat(*self.g), p=self.pars.get_sym_vec())
+        prob = dict(f=J, x=x, g=ca.vertcat(*self.g), p=self.pars.get_vector())
         self.solver = ca.nlpsol('solver', 'ipopt', prob, self.options)
 
     def build_constraints(self):
@@ -135,7 +138,8 @@ class MpcPlanner:
     def add_continuity_constraints(self, x_next, x):
         nx = self.nx
         H = self.H
-        self.g += [ca.reshape(self.pars['x0'] - x[:, 0], nx, 1)]
+
+        #self.g += [ca.reshape(self.pars['x0'] - x[:, 0], nx, 1)]
         self.g += [ca.reshape(x_next[:, :] - x[:, :], nx * H, 1)]
         self.lbg += [self.mpc_params['constraint_slack']] * nx * H
         self.ubg += [-self.mpc_params['constraint_slack']] * nx * H
