@@ -115,7 +115,7 @@ def map_franka_joint_state(msg):
         tau.append(msg.effort[ind])
     return q, v, tau
 
-def yaml_load(path, fi, default_path = 'config/'):
+def yaml_load(path, fi, default_path = 'config_files/'):
     try:
         yaml_file = open(path+fi, 'r')
         print("File {} loaded from {}".format(fi, path))

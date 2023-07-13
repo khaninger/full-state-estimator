@@ -30,7 +30,7 @@ enable_rotation: false
 mpc_pts: 13
 N_p: 3                       # dimension of impedance
 dt: 0.1                      # sampling time
-H: 7                         # planning horizon
+H: 6                        # planning horizon
 constraint_slack: 0.0
 bound_relax_factor: 1e-6
 

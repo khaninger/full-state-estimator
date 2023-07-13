@@ -260,6 +260,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     est_pars = {}
+    mpc_path = "/home/ipk410/converging/full_state_estimator/config_files"
     if args.est_stiff: est_pars['contact_1'] = ['stiff']
     if args.est_geom: est_pars['contact_1'] = ['pos']
 
@@ -270,4 +271,4 @@ if __name__ == '__main__':
         if args.bag == "": rospy.signal_shutdown("Need bag to optimize params from")
         param_fit(args.bag)
     else:
-        start_node(est_pars)
+        start_node(mpc_path=mpc_path, est_pars=est_pars)

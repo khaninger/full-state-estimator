@@ -9,7 +9,7 @@ class MpcPlanner:
     def __init__(self, mpc_params, icem_params, ipopt_options):
         self.mpc_params = mpc_params  # mpc parameters
         self.icem_params = icem_params
-        self.H = self.mpc_params['planning_horizon']  # number of mpc steps
+        self.H = self.mpc_params['H']  # number of mpc steps
         self.dt = self.mpc_params['dt']  # sampling time
         self.robots = RobotDict("config_files/franka.yaml", ["config_files/contact.yaml", "config_files/free_space.yaml"], {}).param_dict
         self.nx = self.robots['free-space'].nx
@@ -22,7 +22,7 @@ class MpcPlanner:
         self.beta = self.icem_params['beta']
         self.num_samples = self.icem_params['num_samples']
         self.alpha = self.icem_params['alpha']
-        self.dim_samples = self.icem_params['dim_samples']  # (nq,H)
+        self.dim_samples = (self.N_p, self.H)  # (nq,H)
         self.mu = np.zeros(self.dim_samples)
         self.std = np.zeros(self.dim_samples)
         self.u_min = self.icem_params['u_min']
@@ -95,7 +95,7 @@ class MpcPlanner:
         vars0 = {}  # initial values for decision variables
 
         # symbolic variables for parameters, these get assigned to numerical values in solve()
-        self.pars = param_set(params0, symb_type=ty.sym)
+        self.pars = param_set(params0)
 
         # build decision variables
         #if opt_imp: vars0['imp_stiff'] = self.pars['imp_stiff']   # imp stiff in tcp coord, initial value is current stiff
@@ -135,7 +135,7 @@ class MpcPlanner:
     def add_continuity_constraints(self, x_next, x):
         nx = self.nx
         H = self.H
-        self.g += [ca.reshape(self.pars['x0'][:, 0] - x[:, 0], nx, 1)]
+        self.g += [ca.reshape(self.pars['x0'] - x[:, 0], nx, 1)]
         self.g += [ca.reshape(x_next[:, :] - x[:, :], nx * H, 1)]
         self.lbg += [self.mpc_params['constraint_slack']] * nx * H
         self.ubg += [-self.mpc_params['constraint_slack']] * nx * H

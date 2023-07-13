@@ -167,7 +167,7 @@ class param_set:
             key: name of variable
             value: parameter which should be set there
         """
-        value = np.asarray(value, float)
+        value = np.asarray(value, object)               # modified dtype to object because we would need to pass a list of tuples as a parameter
         if self.__symb_type:         # Symbolic parameters
             self.__vars[key]  = self.__symb_type(key, *value.shape)
         else:

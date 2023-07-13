@@ -205,9 +205,11 @@ class HybridParticleFilter:
 
 
     def get_statedict(self):
+        self.estimate_state()
         state_dict = {}
-        state_dict['mean_state'] = self.x['mu']
+        state_dict['x0'] = self.x['mu']
         state_dict['list_particles'] = self.x['list_particles']
+
 
         return state_dict
 
