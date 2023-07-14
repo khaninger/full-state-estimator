@@ -119,7 +119,8 @@ class decision_var_set:
         x  = self.vectorize('x')
         lb = self.vectorize('lb')
         ub = self.vectorize('ub')
-        return x, lb, ub
+        x0 = self.vectorize('x0')
+        return x, lb, ub, x0
 
     def get_x0(self):
         return self.vectorize('x0')
@@ -152,10 +153,11 @@ class param_set:
     """
     Helper class for parameters. Simple dictionary which vectorizes
     """
-    def __init__(self, p = {}, symb_type = None):
+
+    def __init__(self, p={}, symb_type=ca.SX.sym):
         assert version_info >= (3, 6), "Python 3.6 required to guarantee dicts are ordered"
-        self.__vars = {}   # Dictionary for holding variables
-        self.__keys = []   # List of elements
+        self.__vars = {}  # Dictionary for holding variables
+        self.__keys = []  # List of elements
         self.__symb_type = symb_type
 
         for key in p.keys():
@@ -167,11 +169,11 @@ class param_set:
             key: name of variable
             value: parameter which should be set there
         """
-        value = np.asarray(value, object)               # modified dtype to object because we would need to pass a list of tuples as a parameter
-        if self.__symb_type:         # Symbolic parameters
-            self.__vars[key]  = self.__symb_type(key, *value.shape)
+        value = np.asarray(value, float)
+        if self.__symb_type:  # Symbolic parameters
+            self.__vars[key] = self.__symb_type(key, *value.shape)
         else:
-            self.__vars[key] = value
+            self.__vars[key] = ca.DM(value)
         self.__keys = list(self.__vars.keys())
 
     def __getitem__(self, key):
@@ -192,13 +194,12 @@ class param_set:
 
     def update(self, num):
         for k, v in num.items():
-            self.__vars[k] = v
+            self.__vars[k] = ca.DM(v)
         return vectorize(self.__vars)
-
-
 
     def get_vector(self):
         return vectorize(self.__vars)
+
 
 def vectorize(dic):
     return ca.vertcat(*[ca.reshape(el, int(np.prod(el.shape)),1) for el in dic.values()])

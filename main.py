@@ -37,15 +37,16 @@ class ros_observer():
                                           self.joint_callback, queue_size=1)
         self.joint_pub = rospy.Publisher('belief_obs',
                                          JointState, queue_size=1)
-        self.imp_rest_pub = rospy.Publisher('cartesian_impedance_example_controller/equilibrium_pose', PoseStamped, queue_size=1)  # impedance rest point publisher
+        #self.imp_rest_pub = rospy.Publisher('cartesian_impedance_example_controller/equilibrium_pose', PoseStamped, queue_size=1)  # impedance rest point publisher
+        self.imp_rest_pub = rospy.Publisher('mpc_equilibrium_pose', PoseStamped, queue_size=1)  # impedance rest point publisher
 
         self.robots = RobotDict("config_files/franka.yaml", ["config_files/contact.yaml", "config_files/free_space.yaml"], est_pars).param_dict
-        self.ny = self.robots['free-space'].ny
-        self.nq = self.robots['free-space'].nq
-        self.nx = self.robots['free-space'].nx
+        self.ny = self.robots['free'].ny
+        self.nq = self.robots['free'].nq
+        self.nx = self.robots['free'].nx
 
         print("Building observer")
-        #self.observer = ekf(self.robots['free-space'])
+        #self.observer = ekf(self.robots['free'])
         #self.observer = ekf(self.robots['contact'])
         self.observer = HybridParticleFilter(self.robots)
         print("Observer ready to recieve msgs")
@@ -55,7 +56,9 @@ class ros_observer():
         self.mpc_state = {}
         #self.rob_state['imp_stiff'] = self.mpc_params['imp_stiff']
         self.rob_state['des_pose'] = self.mpc_params['des_pose']  # this is the desired pose for stage cost tracking term
-        self.rob_state.update(self.observer.get_statedict())
+        self.rob_state.update(self.observer.get_statedict()[0])
+        self.par_icem = {'des_pose': self.mpc_params['des_pose'], 'imp_stiff': self.mpc_params['imp_stiff']}
+        self.par_icem.update(self.observer.get_statedict()[1])
         # init MPC
         self.mpc = MpcPlanner(mpc_params=self.mpc_params,
                               icem_params=self.icem_params,
@@ -106,8 +109,8 @@ class ros_observer():
         #msg_tau_i = build_jt_msg(self.x['y_meas'][-self.nq:])
         #print(msg_belief)
 
-        x, dx = self.robots['free-space'].get_tcp_motion(self.x['mu'][:self.nq], self.x['mu'][-self.nq:])
-        msg_ee = build_jt_msg((x[0].full(), dx.full()))
+        #x, dx = self.robots['free'].get_tcp_motion(self.x['mu'][:self.nq], self.x['mu'][-self.nq:])
+        #msg_ee = build_jt_msg((x[0].full(), dx.full()))
     
         if not rospy.is_shutdown():
 
@@ -138,17 +141,23 @@ class ros_observer():
         self.rob_state['imp_stiff'] = np.array((imp_pars['translational_stiffness_x'],
                                                 imp_pars['translational_stiffness_y'],
                                                 imp_pars['translational_stiffness_z']))
+        self.icem_params['imp_stiff'] = np.array((imp_pars['translational_stiffness_x'],
+                                                  imp_pars['translational_stiffness_y'],
+                                                  imp_pars['translational_stiffness_z']))
 
     def control(self):
         if any(el is None for el in self.rob_state.values()) or rospy.is_shutdown(): return
 
         # MPC calc
         # Build parameters dictionary for the MPC problem
-        params = self.rob_state
-        params.update(self.observer.get_statedict())
+        params_mpc = self.rob_state
+        params_mpc.update(self.observer.get_statedict()[0])
+        params_icem = self.par_icem
+        params_icem.update(self.observer.get_statedict()[1])
+
 
         start = time.time()
-        self.mpc_state = self.mpc.solve(params)
+        self.mpc_state = self.mpc.solve(params_mpc, params_icem)
         self.timelist.append(time.time() - start)
         self.publish_imp_rest()  # publish impedance optimized rest pose --> to be sen to franka impedance interface
 
@@ -161,12 +170,12 @@ def start_node(mpc_path, est_pars):
     rospy.init_node('observer')
     node = ros_observer(mpc_path=mpc_path, est_pars=est_pars)
     rospy.on_shutdown(node.shutdown)  # Set shutdown to be executed when ROS exits
-    rospy.sleep(1e1)  # Sleep so ROS can init
+    rospy.sleep(1e-1)  # Sleep so ROS can init
     #rospy.spin()
     while not rospy.is_shutdown():
         node.update_state_async()
         node.control()
-        time.sleep(1e2)  # Sleep so ROS subscribers can update
+        time.sleep(1e-8)  # Sleep so ROS subscribers can update
 
 def generate_traj(bag, est_pars = {}):
     print('Generating trajectory from {}'.format(bag))

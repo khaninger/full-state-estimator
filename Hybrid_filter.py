@@ -29,15 +29,15 @@ class HybridParticleFilter:
         #self.belief_contact = 0.2
         #self.robot_dict = robot.param_dict
         self.N_eff = 0
-        self.x = {'mu': robot['free-space'].xi_init, 'cov': robot['free-space'].cov_init,
+        self.x = {'mu': robot['free'].xi_init, 'cov': robot['free'].cov_init,
                   'belief_free': 0.6, 'belief_contact': 0.4}
         self.belief_init = np.array([self.x['belief_free'], self.x['belief_contact']])
         #print(self.x['mu'])
-        self.proc_noise = robot['free-space'].proc_noise
-        self.meas_noise = robot['free-space'].meas_noise
-        self.ny = robot['free-space'].ny
-        self.nq = robot['free-space'].nq
-        self.nx = robot['free-space'].nx
+        self.proc_noise = robot['free'].proc_noise
+        self.meas_noise = robot['free'].meas_noise
+        self.ny = robot['free'].ny
+        self.nq = robot['free'].nq
+        self.nx = robot['free'].nx
 
         self.y_hat = np.zeros((self.num_particles, self.ny, 1))
         self.S_t = np.zeros((self.num_particles, self.ny, self.ny))
@@ -115,7 +115,7 @@ class HybridParticleFilter:
 
                 particle.weight = sys.float_info.epsilon
 
-            if particle.sampled_mode == 'free-space':
+            if particle.sampled_mode == 'free':
                 particle.weight *= particle.mode[0]
             elif particle.sampled_mode == 'contact':
                 particle.weight *= particle.mode[1]
@@ -128,7 +128,7 @@ class HybridParticleFilter:
             #print(particle.weight)
             self.weightsum += particle.weight**2
         self.N_eff = 1/self.weightsum  # effective number of particles, needed for resampling step
-        self.x['belief_free'] = sum([particle.weight for particle in self.particles if particle.sampled_mode == 'free-space'])
+        self.x['belief_free'] = sum([particle.weight for particle in self.particles if particle.sampled_mode == 'free'])
         self.x['belief_contact'] = sum([particle.weight for particle in self.particles if particle.sampled_mode == 'contact'])
         #print(self.belief_contact)
         for particle in self.particles:
@@ -207,11 +207,12 @@ class HybridParticleFilter:
     def get_statedict(self):
         self.estimate_state()
         state_dict = {}
-        state_dict['x0'] = self.x['mu']
-        state_dict['list_particles'] = self.x['list_particles']
-
-
-        return state_dict
+        icem_param = {}
+        state_dict['init_state'] = self.x['mu']
+        icem_param['list_particles'] = self.x['list_particles']
+        state_dict['belief_free'] = self.x['belief_free']
+        state_dict['belief_contact'] = self.x['belief_contact']
+        return state_dict, icem_param
 
     def step(self, q, tau, F=None):
         self.propagate(q, tau, F=None)

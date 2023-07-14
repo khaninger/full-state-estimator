@@ -12,13 +12,13 @@ class MpcPlanner:
         self.H = self.mpc_params['H']  # number of mpc steps
         self.dt = self.mpc_params['dt']  # sampling time
         self.robots = RobotDict("config_files/franka.yaml", ["config_files/contact.yaml", "config_files/free_space.yaml"], {}).param_dict
-        self.nx = self.robots['free-space'].nx
-        self.nq = self.robots['free-space'].nq
+        self.nx = self.robots['free'].nx
+        self.nq = self.robots['free'].nq
         self.N_p = self.mpc_params['N_p']  # dimensions of impedance
         self.constraint_slack = self.mpc_params['constraint_slack']
         self.modes = self.robots.keys()
         self.disc_dyn_mpc = {mode: self.robots[mode].dyn_mpc for mode in self.modes}  # for constructing overall cost
-        self.rollouts = {mode: self.robots[mode].create_rollout for mode in self.modes}  # for rolling out trajectories in CEM
+        self.rollouts = {mode: self.robots[mode].create_rollout(self.H) for mode in self.modes}  # for rolling out trajectories in CEM
         self.beta = self.icem_params['beta']
         self.num_samples = self.icem_params['num_samples']
         self.alpha = self.icem_params['alpha']
@@ -57,22 +57,24 @@ class MpcPlanner:
 
         return best_state_traj, mu
 
-    def solve(self, params):
+    def solve(self, params_mpc, params_icem):
 
         if not hasattr(self, "solver"):
-            self.build_solver(params)
+            self.build_solver(params_mpc)
 
-        self.args['p'] = self.pars.update(params)  # update parameters for the solver
+        self.args['p'] = self.pars.update(params_mpc)  # update parameters for the solver
 
         # warm start nlp with iCEM
-        best_traj, best_input = self.iCEM_warmstart(params)
-        self.vars.set_x0('xi', best_traj)
+        best_traj, best_input = self.iCEM_warmstart(params_icem)
+
+        self.vars.set_x0('q_free', best_traj)
+        self.vars.set_x0('q_contact', best_traj)
         self.vars.set_x0('imp_rest', best_input)
         self.args['x0'] = self.vars.get_x0()
-
+        #print(self.args['x0'].shape)
         sol = self.solver(**self.args)
 
-        self.args['x0'] = sol['x']
+        #self.args['x0'] = sol['x']
         self.args['lam_x0'] = sol['lam_x']
         self.args['lam_g0'] = sol['lam_g']
 
@@ -99,31 +101,38 @@ class MpcPlanner:
 
         # build decision variables
         #if opt_imp: vars0['imp_stiff'] = self.pars['imp_stiff']   # imp stiff in tcp coord, initial value is current stiff
-        vars0['imp_stiff'] = self.pars['imp_stiff']
-        vars0['imp_rest'] = np.zeros(N_p)
+        #vars0['imp_stiff'] = self.pars['imp_stiff']       # imp stiff in tcp coord, initial value is current stiff
+        vars0['imp_rest'] = np.zeros((N_p, self.H))       # initialize control action
         for m in self.modes:
             vars0['q_' + m] = np.zeros((nx, self.H))  # joint trajectory relative to tcp
         ub, lb = self.build_dec_var_constraints()
         # turn the decision variables into a decision_var object
-        self.vars = decision_var_set(x0=vars0, ub=ub, lb=lb, symb_type=ty.sym)
+        self.vars = decision_var_set(x0=vars0, ub=ub, lb=lb, symb_type=ca.SX.sym)
+
         imp_stiff = self.pars['imp_stiff']
         self.build_constraints()
         for mode in self.modes:
+
             dyn_next = self.disc_dyn_mpc[mode](xi=self.vars['q_' + mode],
                                                imp_rest=self.vars['imp_rest'],
                                                imp_stiff=imp_stiff,
                                                des_pose=self.pars['des_pose'])
 
             self.add_continuity_constraints(dyn_next['xi_next'], self.vars['q_' + mode])
-            #print(dyn_next['xi_next'])
+            #print(dyn_next['xi_next'].shape)
             J += self.pars['belief_' + mode] * ca.sum2(dyn_next['cost'])
-            print(J)
+
 
         # set up dictionary of arguments to solve
         x, lbx, ubx, x0 = self.vars.get_dec_vectors()
 
         self.args = dict(x0=x0, lbx=lbx, ubx=ubx, lbg=self.lbg, ubg=self.ubg)
+        #print(self.args['x0'].shape)
+
         prob = dict(f=J, x=x, g=ca.vertcat(*self.g), p=self.pars.get_vector())
+        #print(prob['p'])
+
+
         self.solver = ca.nlpsol('solver', 'ipopt', prob, self.options)
 
     def build_constraints(self):
@@ -131,16 +140,16 @@ class MpcPlanner:
         self.g = []  # constraints functions
         self.lbg = []  # lower bound on constraints
         self.ubg = []  # upper-bound on constraints
-        self.g += [self.vars.get_deviation('imp_stiff')]
-        self.lbg += [-self.mpc_params['delta_K_max']] * self.N_p
-        self.ubg += [self.mpc_params['delta_K_max']] * self.N_p
+        #self.g += [self.vars.get_deviation('imp_stiff')]
+        #self.lbg += [-self.mpc_params['delta_K_max']] * self.N_p
+        #self.ubg += [self.mpc_params['delta_K_max']] * self.N_p
 
     def add_continuity_constraints(self, x_next, x):
         nx = self.nx
         H = self.H
 
-        #self.g += [ca.reshape(self.pars['x0'] - x[:, 0], nx, 1)]
-        self.g += [ca.reshape(x_next[:, :] - x[:, :], nx * H, 1)]
+        self.g += [ca.reshape(self.pars['init_state'] - x[:, 0], nx, 1)]
+        self.g += [ca.reshape(x_next[:, :-1] - x[:, 1:], nx * (H-1), 1)]
         self.lbg += [self.mpc_params['constraint_slack']] * nx * H
         self.ubg += [-self.mpc_params['constraint_slack']] * nx * H
 

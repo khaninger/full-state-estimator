@@ -1,4 +1,4 @@
-model: free-space
+model: free
 contact_models:
   - contact_1
 contact_1_pos:
