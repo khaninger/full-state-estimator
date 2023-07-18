@@ -22,7 +22,7 @@ class HybridParticleFilter:
 
 
         self.particles = []
-        self.num_particles = 80
+        self.num_particles = 300
         self.trans_matrix = np.array([[0.8, 0.2], [0.2, 0.8]])
         #self.belief_init = np.array([0.8, 0.2])
         #self.belief_free = 0.8
@@ -38,9 +38,11 @@ class HybridParticleFilter:
         self.ny = robot['free'].ny
         self.nq = robot['free'].nq
         self.nx = robot['free'].nx
+        self.pinv_jac = robot['free'].jacpinv  # casadi function for the jacobian pseudoinverse, need to feed joint position vector as input
 
         self.y_hat = np.zeros((self.num_particles, self.ny, 1))
         self.S_t = np.zeros((self.num_particles, self.ny, self.ny))
+        #self.F_i = np.zeros((self.num_particles, 3, 1))     # tensor for storing external force
         self.y_meas = np.zeros((self.num_particles, self.ny, 1))
         self.step_fn = {}
         self.modes_lst = list(robot.keys())  # getting the list of keys of robot dict, for mode sampling
@@ -72,6 +74,7 @@ class HybridParticleFilter:
             particle.mu = res['mu_next']
             particle.Sigma = res['cov_next']
             self.S_t[i] = res['S_hat']
+            #self.F_i[i] = res['F_ext']
             self.y_hat[i] = res['y_hat']   # predicted measurements
             particle.weight = res['likelihood']
             self.y_meas[i] = res['y_meas']
@@ -145,6 +148,7 @@ class HybridParticleFilter:
 
 
 
+
         vel = ca.DM(self.num_particles, self.nq)
         list_tuples = []
 
@@ -155,6 +159,7 @@ class HybridParticleFilter:
             list_tuples.append((particle.sampled_mode, particle.mu))    # creating the list of tuples to be returned for CEM
             pos[i, :] = particle.mu[:self.nq]
             est_force[i, :] = self.y_hat[i][-self.nq:]
+
             #print(self.y_hat[i][-self.nq:])
             #print(particle.weight)
             weights[i] = particle.weight
@@ -162,6 +167,7 @@ class HybridParticleFilter:
             cov[i] = particle.Sigma
         #print(weights.shape)
         self.x['est_force'] = np.average(est_force, weights=weights, axis=0)
+        self.x['F_ext'] = np.array(self.pinv_jac(np.average(pos, weights=weights, axis=0)) @ np.average(est_force, weights=weights, axis=0)).ravel()
         self.x['mu'][:self.nq] = np.average(pos, weights=weights, axis=0)
         self.x["mu"][-self.nq:] = np.average(vel, weights=weights, axis=0)
         self.x["cov"] = np.average(cov, weights=weights, axis=0)

@@ -88,7 +88,6 @@ class Robot():
         ee = self.cdata.oMf[self.cmodel.getFrameId('fr3_link8')]
         self.fwd_kin = ca.Function('p',[q],[ee.translation, ee.rotation])
         self.x_ee = self.fwd_kin(q) # x is TCP pose as (pos, R), where pos is a 3-Vector and R a rotation matrix
-    
         J = ca.jacobian(self.x_ee[0], q)
         Jd = ca.jacobian(J.reshape((np.prod(J.shape),1)), q)@dq # Jacobian on a matrix is tricky so we make a vector
         Jd = Jd.reshape(J.shape)@dq # then reshape the result into the right shape
@@ -116,7 +115,9 @@ class Robot():
         Mtilde_inv = ca.inv(M+h*B)
 
         tau_i = -self.contact.get_contact_torque(q)  # get total estimated contact torque
+        F_i = -self.contact.get_contact_force(q)     # get total estimated contact force in cartesian space
         self.vars['tau_i'] = tau_i  # make contact torque an independent variable
+        self.vars['F_i'] = F_i      # make contact force an independent variable
 
         delta = Mtilde_inv@(-B@dq + tau_err + tau_i)
 
@@ -181,7 +182,10 @@ class Robot():
         M = cpin.crba(self.cmodel, self.cdata, q) + ca.diag(0.5 * np.ones(self.nq))
         Mtilde_inv = ca.inv(M + h * B)
         F_i = -self.contact.get_contact_force(q)  # get total estimated contact force
-        jac = self.jac(q)  # jacobian
+        tau_i = -self.contact.get_contact_torque(q)  # get estimated contact torques
+        jac = self.jac(q)    # jacobian
+        p_inv_jac = self.jacpinv(q)  # jacobian pseudoinverse
+        F_ext = p_inv_jac @ tau_i   # estimated external contact forces in cartesian space
         #print(stiff_matrix.shape)
         x, dx = self.get_tcp_motion(q, dq)
 

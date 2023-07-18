@@ -37,6 +37,7 @@ class ros_observer():
                                           self.joint_callback, queue_size=1)
         self.joint_pub = rospy.Publisher('belief_obs',
                                          JointState, queue_size=1)
+        self.F_pub = rospy.Publisher('est_force', JointState, queue_size=1)    # publisher for estimated external forces
         #self.imp_rest_pub = rospy.Publisher('cartesian_impedance_example_controller/equilibrium_pose', PoseStamped, queue_size=1)  # impedance rest point publisher
         self.imp_rest_pub = rospy.Publisher('mpc_equilibrium_pose', PoseStamped, queue_size=1)  # impedance rest point publisher
 
@@ -83,7 +84,8 @@ class ros_observer():
             self.observer_update()
             #print(self.x['mu'][:self.nq])
             #print(self.x['mu'][-self.nq:])
-            #print('est_force')
+            print(self.x['F_ext'])
+            #print(self.x['est_force'])
             #print(np.all(np.linalg.det(self.x['cov'])>0))
             #print(self.x['est_force'])
             #print('meas_force')
@@ -105,9 +107,9 @@ class ros_observer():
         #msg = build_jt_msg(self.x['q'], self.x['dq'],
                            #np.concatenate((self.x.get('stiff',[]), self.x.get('cont_pt', []))))
         msg = build_jt_msg([self.x['mu'][:self.nq], self.x['mu'][-self.nq:]])
-        msg_belief = build_jt_msg([self.x['belief_free'], self.x['belief_contact']])
-        #msg_tau_i = build_jt_msg(self.x['y_meas'][-self.nq:])
-        #print(msg_belief)
+        msg_belief = build_jt_msg([self.x['belief_free'], self.x['belief_contact']])  # message for belief
+        msg_est_F_i = build_jt_msg(self.x['F_ext'])   # message for estimated external contact forces
+
 
         #x, dx = self.robots['free'].get_tcp_motion(self.x['mu'][:self.nq], self.x['mu'][-self.nq:])
         #msg_ee = build_jt_msg((x[0].full(), dx.full()))
@@ -115,7 +117,7 @@ class ros_observer():
         if not rospy.is_shutdown():
 
             self.joint_pub.publish(msg_belief)
-
+            self.F_pub.publish(msg_est_F_i)
             #self.joint_pub.publish(msg)
             #self.joint_pub.publish(msg_tau_i)
             #self.ee_pub.publish(msg_ee)

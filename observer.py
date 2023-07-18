@@ -15,7 +15,8 @@ def build_step_fn(robot):
     mu_next = robot.vars['xi_next']
     tau_i = robot.vars['tau_i']  # expected contact torque
     y = robot.vars['y']          # expected pos and torque observations 
-
+    F_i = robot.jacpinv(mu[:robot.nq]) @ tau_i   # expected contact force in cartesian space
+    #print(F_i.shape)
     A, C = robot.get_linearized({'xi': mu})  # get linearized state and observation matrices wrt states
     N = robot.nq
     q_meas = ca.SX.sym('q_meas', robot.nq)  # joint positions measurements
@@ -24,6 +25,7 @@ def build_step_fn(robot):
     cov = ca.SX.sym('cov', mu.shape[0], mu.shape[0])
 
     cov_next = A@cov@(A.T) + proc_noise
+    
 
 
 
@@ -46,10 +48,10 @@ def build_step_fn(robot):
     #print(likelihood.shape)
     fn_dict = {'tau':tau_meas, 'mu':mu, 'cov':cov, 'q_meas':q_meas,
                'mu_next':mu_next_corr, 'cov_next':cov_next_corr, 'y_hat': y, 'S_hat': S_hat,
-               'likelihood': likelihood, 'A': A, 'C': C, 'cov_next_pre': cov_next, 'Q': Q, 'tau_ext': tau_i, 'y_meas': y_meas}
+               'likelihood': likelihood, 'A': A, 'C': C, 'cov_next_pre': cov_next, 'Q': Q, 'tau_ext': tau_i, 'y_meas': y_meas, 'F_ext': F_i}
     step_fn = ca.Function('ekf_step', fn_dict,
                           ['tau', 'mu', 'cov', 'q_meas'], # inputs to casadi function
-                          ['mu_next', 'cov_next', 'S_hat', 'y_hat', 'likelihood', 'A', 'C', 'cov_next_pre', 'Q', 'tau_ext', 'tau_g', 'y_meas'])   # outputs of casadi function
+                          ['mu_next', 'cov_next', 'S_hat', 'y_hat', 'likelihood', 'A', 'C', 'cov_next_pre', 'Q', 'tau_ext', 'tau_g', 'y_meas', 'F_ext'])   # outputs of casadi function
 
     #print(step_fn)
     return step_fn
