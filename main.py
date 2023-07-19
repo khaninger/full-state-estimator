@@ -57,6 +57,7 @@ class ros_observer():
         self.mpc_state = {}
         #self.rob_state['imp_stiff'] = self.mpc_params['imp_stiff']
         self.rob_state['des_pose'] = self.mpc_params['des_pose']  # this is the desired pose for stage cost tracking term
+        self.rob_state['imp_stiff'] = self.mpc_params['imp_stiff']
         self.rob_state.update(self.observer.get_statedict()[0])
         self.par_icem = {'des_pose': self.mpc_params['des_pose'], 'imp_stiff': self.mpc_params['imp_stiff']}
         self.par_icem.update(self.observer.get_statedict()[1])
@@ -84,7 +85,7 @@ class ros_observer():
             self.observer_update()
             #print(self.x['mu'][:self.nq])
             #print(self.x['mu'][-self.nq:])
-            print(self.x['F_ext'])
+            #print(self.x['F_ext'])
             #print(self.x['est_force'])
             #print(np.all(np.linalg.det(self.x['cov'])>0))
             #print(self.x['est_force'])
@@ -161,7 +162,7 @@ class ros_observer():
         start = time.time()
         self.mpc_state = self.mpc.solve(params_mpc, params_icem)
         self.timelist.append(time.time() - start)
-        self.publish_imp_rest()  # publish impedance optimized rest pose --> to be sen to franka impedance interface
+        self.publish_imp_rest()  # publish impedance optimized rest pose --> to be sent to franka impedance interface
 
 
 

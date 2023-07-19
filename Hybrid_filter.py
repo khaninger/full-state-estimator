@@ -22,7 +22,7 @@ class HybridParticleFilter:
 
 
         self.particles = []
-        self.num_particles = 300
+        self.num_particles = 80
         self.trans_matrix = np.array([[0.8, 0.2], [0.2, 0.8]])
         #self.belief_init = np.array([0.8, 0.2])
         #self.belief_free = 0.8
