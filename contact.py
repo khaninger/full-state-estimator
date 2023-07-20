@@ -62,9 +62,15 @@ class Contact():
             self.forces[contact] = F_i
         
         fn_dict.update(res_dict)
+        new_dic = {}
+        new_dic['q'] = q
+        new_dic['F_ext'] = self.get_contact_force(fn_dict['q'])
         self.contact_info = ca.Function(contact+'_info', fn_dict,
                                         ['q', *self.est_pars.keys(), *opt_pars.keys()],
                                         [*res_dict.keys()])
+        self.force_sym = ca.Function('F_ext', new_dic, ['q'], ['F_ext'])  # casadi function for creating total force from sym variables
+
+
             
     def get_contact_torque(self, q):
         tau = 0
@@ -73,7 +79,7 @@ class Contact():
         return tau
     def get_contact_force(self, q):
         force = 0
-        for contact in  self.contacts:
+        for contact in self.contacts:
             force += self.forces[contact]
         return force
             

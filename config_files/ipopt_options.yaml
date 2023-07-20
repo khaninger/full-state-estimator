@@ -16,7 +16,7 @@ ipopt.mu_init: 0.01
 ipopt.mu_oracle: probing
 ipopt.mu_strategy: adaptive
 ipopt.print_frequency_iter: 1
-ipopt.print_level: 5   # number of levels for optimization results
+ipopt.print_level: 0   # number of levels for optimization results
 ipopt.print_options_documentation: 'no'
 ipopt.print_timing_statistics: 'yes'
 ipopt.print_user_options: 'no'

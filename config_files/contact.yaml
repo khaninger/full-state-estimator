@@ -8,8 +8,10 @@ contact_1_pos:
 contact_1_stiff:
   - 0
   - 0
-  - 43465.1
+  - 4346.51
 contact_1_rest:
   - 0.415
   - -0.365
   - 0.2169
+# 0.2169
+# 43465.1 opt_val for stiff

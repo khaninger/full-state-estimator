@@ -116,6 +116,7 @@ class Robot():
 
         tau_i = -self.contact.get_contact_torque(q)  # get total estimated contact torque
         F_i = -self.contact.get_contact_force(q)     # get total estimated contact force in cartesian space
+        self.force_sym = self.contact.force_sym
         self.vars['tau_i'] = tau_i  # make contact torque an independent variable
         self.vars['F_i'] = F_i      # make contact force an independent variable
 
@@ -199,7 +200,7 @@ class Robot():
         dq_next = dq + h * delta
         q_next = q + h * dq_next
         dyn_mpc_dict['xi_next'] = ca.vertcat(q_next, dq_next, dyn_mpc_dict['xi'][nq2:])
-        dyn_mpc_dict['cost'] = 0.8*ca.sumsqr(des_pose - x[0]) + 0.2*ca.sumsqr(imp_rest - x[0])  # write 1-step cost --> would be mapped across planning horizon in MPC module
+        dyn_mpc_dict['cost'] = 0.999*ca.sumsqr(des_pose - x[0]) + 0.001*ca.sumsqr(imp_rest - x[0])  # write 1-step cost --> would be mapped across planning horizon in MPC module
         self.dyn_mpc = ca.Function('disc_dyn', dyn_mpc_dict,
                                     ['xi', 'imp_rest', 'imp_stiff', 'des_pose', *opt_pars.keys()],
                                     ['xi_next', 'cost'], self.jit_options).expand()

@@ -119,7 +119,9 @@ class MpcPlanner:
                                                des_pose=self.pars['des_pose'])
 
             self.add_continuity_constraints(dyn_next['xi_next'], self.vars['q_' + mode])
-            #print(dyn_next['xi_next'].shape)
+            #self.add_max_force_constraint(self.robots[mode].force_sym(dyn_next['xi_next'][:self.nq, -1]))
+            #print(len(self.lbg))
+            #print(self.robots[mode].force_sym(self.vars['q_' + mode][:self.nq, :]).shape)
             J += self.pars['belief_' + mode] * ca.sum2(dyn_next['cost'])
 
 
@@ -143,6 +145,15 @@ class MpcPlanner:
         #self.g += [self.vars.get_deviation('imp_stiff')]
         #self.lbg += [-self.mpc_params['delta_K_max']] * self.N_p
         #self.ubg += [self.mpc_params['delta_K_max']] * self.N_p
+
+    def add_max_force_constraint(self, sym_force):
+        H = self.H
+        #print(sym_force.shape)
+        self.g += [ca.reshape(sym_force, 1, 1)]
+        self.lbg += [-3000] * 1
+        self.ubg += [100000000000] * 1
+
+
 
     def add_continuity_constraints(self, x_next, x):
         nx = self.nx

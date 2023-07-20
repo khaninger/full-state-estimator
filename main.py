@@ -40,6 +40,7 @@ class ros_observer():
         self.F_pub = rospy.Publisher('est_force', JointState, queue_size=1)    # publisher for estimated external forces
         self.x_tcp_pub = rospy.Publisher('tcp_pos', JointState, queue_size=1)  # publisher for tcp cartesian motion
         #self.imp_rest_pub = rospy.Publisher('cartesian_impedance_example_controller/equilibrium_pose', PoseStamped, queue_size=1)  # impedance rest point publisher
+        #self.imp_rest_pub = rospy.Publisher('cartesian_impedance_example_controller/equilibrium_pose', PoseStamped, queue_size=1)  # impedance rest point publisher
         self.imp_rest_pub = rospy.Publisher('mpc_equilibrium_pose', PoseStamped, queue_size=1)  # impedance rest point publisher
 
         self.robots = RobotDict("config_files/franka.yaml", ["config_files/contact.yaml", "config_files/free_space.yaml"], est_pars).param_dict
@@ -85,7 +86,7 @@ class ros_observer():
             self.observer_update()
             #print(self.x['mu'][:self.nq])
             #print(self.x['mu'][-self.nq:])
-            #print(self.x['F_ext'])
+            #print(np.linalg.norm(self.x['F_ext']))
             #print(self.x['est_force'])
             #print(np.all(np.linalg.det(self.x['cov'])>0))
             #print(self.x['est_force'])
@@ -136,8 +137,8 @@ class ros_observer():
 
     def publish_imp_rest(self):
         action_to_execute = self.mpc_state['imp_rest'][:, 0]  # mpc solver returns the complete action sequence, need to pick first element
-        des_pose_w = compliance_to_world(self.rob_state['pose'], action_to_execute, only_position=True)
-        msg_imp_xd = get_pose_msg(position=des_pose_w, frame_id='panda_link0')    # get desired rest pose in world frame
+        #des_pose_w = compliance_to_world(self.rob_state['pose'], action_to_execute, only_position=True)
+        msg_imp_xd = get_pose_msg(position=action_to_execute, frame_id='panda_link0')    # get desired rest pose in world frame
         msg_imp_xd.pose.orientation = self.init_orientation
         if not rospy.is_shutdown():
             self.imp_rest_pub.publish(msg_imp_xd)
@@ -168,6 +169,7 @@ class ros_observer():
 
         start = time.time()
         self.mpc_state = self.mpc.solve(params_mpc, params_icem)
+        #print(self.mpc_state['q_free'])
         self.timelist.append(time.time() - start)
         self.publish_imp_rest()  # publish impedance optimized rest pose --> to be sent to franka impedance interface
 

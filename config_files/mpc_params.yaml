@@ -19,9 +19,13 @@ imp_stiff:
   - 100
 #### desired pose in cartesian space --> desired point
 des_pose:
-  - 0.39
-  - -0.35
-  - 0.11
+  - 0.35961
+  - -0.35823
+  - 0.64
+
+
+
+
 #### MPC Problem ####
 
 enable_rotation: false
@@ -29,7 +33,7 @@ enable_rotation: false
 
 mpc_pts: 13
 N_p: 3                       # dimension of impedance
-dt: 0.1                      # sampling time
+dt: 0.01                      # sampling time
 H: 6                        # planning horizon
 constraint_slack: 0.0
 bound_relax_factor: 1e-6
