@@ -190,7 +190,7 @@ class Robot():
         x, dx = self.get_tcp_motion(q, dq)
 
         #print(x[0].shape)
-        delta = Mtilde_inv @ jac.T @ (F_i + damp_matrix @ dx + stiff_matrix @ (imp_rest - x[0]))
+        delta = Mtilde_inv @ jac.T @ (F_ext + damp_matrix @ dx + stiff_matrix @ (imp_rest - x[0]))
         dyn_mpc_dict = {'xi': self.vars['xi'],
                         'imp_rest': imp_rest,
                         'imp_stiff': imp_stiff,

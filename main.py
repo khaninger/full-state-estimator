@@ -29,15 +29,16 @@ class ros_observer():
         self.q_m = None        # measured joint position
         self.tau_m = None      # measured joint torque
         self.x = None          # observer state
+        self.x_tcp = None      # tcp cartesian motion
+
 
         self.tf_buffer = tf.Buffer()
         self.tf_listener = tf.TransformListener(self.tf_buffer)
 
-        self.joint_sub = rospy.Subscriber(joint_topic, JointState,
-                                          self.joint_callback, queue_size=1)
-        self.joint_pub = rospy.Publisher('belief_obs',
-                                         JointState, queue_size=1)
+        self.joint_sub = rospy.Subscriber(joint_topic, JointState, self.joint_callback, queue_size=1)
+        self.joint_pub = rospy.Publisher('belief_obs', JointState, queue_size=1)
         self.F_pub = rospy.Publisher('est_force', JointState, queue_size=1)    # publisher for estimated external forces
+        self.x_tcp_pub = rospy.Publisher('tcp_pos', JointState, queue_size=1)  # publisher for tcp cartesian motion
         #self.imp_rest_pub = rospy.Publisher('cartesian_impedance_example_controller/equilibrium_pose', PoseStamped, queue_size=1)  # impedance rest point publisher
         self.imp_rest_pub = rospy.Publisher('mpc_equilibrium_pose', PoseStamped, queue_size=1)  # impedance rest point publisher
 
@@ -45,7 +46,6 @@ class ros_observer():
         self.ny = self.robots['free'].ny
         self.nq = self.robots['free'].nq
         self.nx = self.robots['free'].nx
-
         print("Building observer")
         #self.observer = ekf(self.robots['free'])
         #self.observer = ekf(self.robots['contact'])
@@ -65,7 +65,7 @@ class ros_observer():
         self.mpc = MpcPlanner(mpc_params=self.mpc_params,
                               icem_params=self.icem_params,
                               ipopt_options=self.ipopt_options)
-        self.par_client = dynamic_reconfigure.client.Client( "/cartesian_impedance_example_controller/dynamic_reconfigure_compliance_param_node")
+        #self.par_client = dynamic_reconfigure.client.Client( "/cartesian_impedance_example_controller/dynamic_reconfigure_compliance_param_node")
         self.init_orientation = self.tf_buffer.lookup_transform('panda_link0', 'panda_EE', rospy.Time(0),
                                                                 rospy.Duration(1)).transform.rotation
 
@@ -101,6 +101,10 @@ class ros_observer():
     def observer_update(self):
         self.x = self.observer.step(q = self.q_m,
                                     tau = self.tau_m)
+        q = self.x['mu'][:self.nq]    # observed joint positions
+        self.x_tcp = np.array(self.observer.get_tcp_motion(q)).ravel()
+        #print(self.x_tcp.shape)
+
 
 
     def publish_belief(self):
@@ -110,6 +114,7 @@ class ros_observer():
         msg = build_jt_msg([self.x['mu'][:self.nq], self.x['mu'][-self.nq:]])
         msg_belief = build_jt_msg([self.x['belief_free'], self.x['belief_contact']])  # message for belief
         msg_est_F_i = build_jt_msg(self.x['F_ext'])   # message for estimated external contact forces
+        msg_x_tcp = build_jt_msg(self.x_tcp)          # message for tcp cartesian position
 
 
         #x, dx = self.robots['free'].get_tcp_motion(self.x['mu'][:self.nq], self.x['mu'][-self.nq:])
@@ -119,6 +124,7 @@ class ros_observer():
 
             self.joint_pub.publish(msg_belief)
             self.F_pub.publish(msg_est_F_i)
+            self.x_tcp_pub.publish(msg_x_tcp)
             #self.joint_pub.publish(msg)
             #self.joint_pub.publish(msg_tau_i)
             #self.ee_pub.publish(msg_ee)
@@ -139,14 +145,15 @@ class ros_observer():
     def update_state_async(self):
         pose_msg = self.tf_buffer.lookup_transform('panda_link0', 'panda_EE', rospy.Time(0), rospy.Duration(0.05))
         self.rob_state['pose'] = msg_to_state(pose_msg)
+        #print(self.rob_state['pose'])
 
-        imp_pars = self.par_client.get_configuration()   # set impedance stiffness values
-        self.rob_state['imp_stiff'] = np.array((imp_pars['translational_stiffness_x'],
-                                                imp_pars['translational_stiffness_y'],
-                                                imp_pars['translational_stiffness_z']))
-        self.icem_params['imp_stiff'] = np.array((imp_pars['translational_stiffness_x'],
-                                                  imp_pars['translational_stiffness_y'],
-                                                  imp_pars['translational_stiffness_z']))
+        #imp_pars = self.par_client.get_configuration()   # set impedance stiffness values
+        #self.rob_state['imp_stiff'] = np.array((imp_pars['translational_stiffness_x'],
+                                                #imp_pars['translational_stiffness_y'],
+                                                #imp_pars['translational_stiffness_z']))
+        #self.icem_params['imp_stiff'] = np.array((imp_pars['translational_stiffness_x'],
+                                                  #imp_pars['translational_stiffness_y'],
+                                                  #imp_pars['translational_stiffness_z']))
 
     def control(self):
         if any(el is None for el in self.rob_state.values()) or rospy.is_shutdown(): return

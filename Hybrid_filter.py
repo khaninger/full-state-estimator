@@ -39,7 +39,7 @@ class HybridParticleFilter:
         self.nq = robot['free'].nq
         self.nx = robot['free'].nx
         self.pinv_jac = robot['free'].jacpinv  # casadi function for the jacobian pseudoinverse, need to feed joint position vector as input
-
+        self.fwd_kin = robot['free'].fwd_kin   # casadi function for calculating tcp motion
         self.y_hat = np.zeros((self.num_particles, self.ny, 1))
         self.S_t = np.zeros((self.num_particles, self.ny, self.ny))
         #self.F_i = np.zeros((self.num_particles, 3, 1))     # tensor for storing external force
@@ -219,6 +219,10 @@ class HybridParticleFilter:
         state_dict['belief_free'] = self.x['belief_free']
         state_dict['belief_contact'] = self.x['belief_contact']
         return state_dict, icem_param
+
+    def get_tcp_motion(self, q):
+        x = self.fwd_kin(q)[0]       # get just cartesian position
+        return x
 
     def step(self, q, tau, F=None):
         self.propagate(q, tau, F=None)

@@ -14,14 +14,14 @@ K_max: 400
 K_cost: 0.000
 
 imp_stiff:
-  - 40
-  - 40
-  - 40
+  - 100
+  - 100
+  - 100
 #### desired pose in cartesian space --> desired point
 des_pose:
-  - 0
-  - 0
-  - 0
+  - 0.39
+  - -0.35
+  - 0.11
 #### MPC Problem ####
 
 enable_rotation: false
