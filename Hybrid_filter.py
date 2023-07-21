@@ -31,7 +31,7 @@ class HybridParticleFilter:
         self.N_eff = 0
         self.x = {'mu': robot['free'].xi_init, 'cov': robot['free'].cov_init,
                   'belief_free': 0.6, 'belief_contact': 0.4}
-        self.belief_init = np.array([self.x['belief_free'], self.x['belief_contact']])
+        self.belief_init = np.array([self.x['belief_contact'], self.x['belief_free']])
         #print(self.x['mu'])
         self.proc_noise = robot['free'].proc_noise
         self.meas_noise = robot['free'].meas_noise
@@ -62,7 +62,10 @@ class HybridParticleFilter:
 
         for i, particle in enumerate(self.particles):
             #print(self.particles)
+            #print(particle.mode_prev)
             particle.mode = np.matmul(particle.mode_prev, self.trans_matrix)
+            #print(particle.mode)
+            #print(self.modes_lst)
             particle.sampled_mode = np.random.choice(self.modes_lst, p=particle.mode)
             #print(tau.shape)
             #print(q.shape)
@@ -78,7 +81,7 @@ class HybridParticleFilter:
             self.y_hat[i] = res['y_hat']   # predicted measurements
             particle.weight = res['likelihood']
             self.y_meas[i] = res['y_meas']
-            #print(particle.sampled_mode, np.linalg.norm(res['F_ext']))
+            print(particle.sampled_mode, np.linalg.norm(res['F_ext'], 2), particle.weight)
             #if np.linalg.norm(res['F_ext'])>200:
                 #print("force > 200")
             #print(particle.sampled_mode, np.linalg.norm(res['F_ext'])>200)
@@ -115,32 +118,33 @@ class HybridParticleFilter:
         summation = 0
         for i, particle in enumerate(self.particles):
             #print(self.y_hat[i].shape)
-            particle.weight = float(particle.weight)
+            #particle.weight = float(np.exp(particle.weight))
+            #particle.weight = float(particle.weight)
 
             #particle.weight = multivariate_normal(mean=self.y_hat[i].ravel(), cov=self.S_t[i]).pdf(q)
             #print(particle.weight)
-            if particle.weight<1e-15:
+            #if particle.weight<1e-15:
 
-                particle.weight = sys.float_info.epsilon
+                #particle.weight = sys.float_info.epsilon
 
             if particle.sampled_mode == 'free':
-                particle.weight *= particle.mode[0]
+                particle.weight += np.log(particle.mode[0])
             elif particle.sampled_mode == 'contact':
-                particle.weight *= particle.mode[1]
-            summation += particle.weight
+                particle.weight += np.log(particle.mode[1])
+            summation += np.exp(particle.weight)
         self.weightsum = 0
         for particle in self.particles:
-            particle.weight /= summation
+            particle.weight -= np.log(summation)
             if particle.weight == 0:
                 particle.weight = sys.float_info.epsilon
             #print(particle.weight)
-            self.weightsum += particle.weight**2
+            self.weightsum += np.exp(particle.weight)**2
         self.N_eff = 1/self.weightsum  # effective number of particles, needed for resampling step
-        self.x['belief_free'] = sum([particle.weight for particle in self.particles if particle.sampled_mode == 'free'])
-        self.x['belief_contact'] = sum([particle.weight for particle in self.particles if particle.sampled_mode == 'contact'])
-        #print(self.belief_contact)
+        self.x['belief_free'] = sum([np.exp(particle.weight) for particle in self.particles if particle.sampled_mode == 'free'])
+        self.x['belief_contact'] = sum([np.exp(particle.weight) for particle in self.particles if particle.sampled_mode == 'contact'])
+        #print(self.x['belief_free'])
         for particle in self.particles:
-            particle.mode_prev = np.array([self.x['belief_free'], self.x['belief_contact']])
+            particle.mode_prev = np.array([self.x['belief_contact'], self.x['belief_free']]).ravel()
 
 
     def estimate_state(self):
@@ -167,7 +171,7 @@ class HybridParticleFilter:
 
             #print(self.y_hat[i][-self.nq:])
             #print(particle.weight)
-            weights[i] = particle.weight
+            weights[i] = np.exp(particle.weight)
             vel[i ,:] = particle.mu[-self.nq:]
             cov[i] = particle.Sigma
         #print(weights.shape)
@@ -202,7 +206,7 @@ class HybridParticleFilter:
         n = 0
         m = 0
         new_samples = []
-        weights = [particle.weight for particle in self.particles]
+        weights = [np.exp(particle.weight) for particle in self.particles]
         Q = np.cumsum(weights).tolist()
         while n < self.num_particles:
             u0 = np.random.uniform(1e-10, 1.0 / self.num_particles, 1)[0]

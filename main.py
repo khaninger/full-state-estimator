@@ -86,7 +86,7 @@ class ros_observer():
             self.observer_update()
             #print(self.x['mu'][:self.nq])
             #print(self.x['mu'][-self.nq:])
-            #print(np.linalg.norm(self.x['F_ext']))
+            #print(self.x['F_ext'])
             #print(self.x['est_force'])
             #print(np.all(np.linalg.det(self.x['cov'])>0))
             #print(self.x['est_force'])

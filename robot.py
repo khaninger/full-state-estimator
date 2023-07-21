@@ -116,6 +116,7 @@ class Robot():
 
         tau_i = -self.contact.get_contact_torque(q)  # get total estimated contact torque
         F_i = -self.contact.get_contact_force(q)     # get total estimated contact force in cartesian space
+
         self.force_sym = self.contact.force_sym
         self.vars['tau_i'] = tau_i  # make contact torque an independent variable
         self.vars['F_i'] = F_i      # make contact force an independent variable
@@ -166,7 +167,8 @@ class Robot():
                              ['xi', *opt_pars.keys()], ['C'], self.jit_options).expand()  # build new casadi function for new observation matrix
         #print(self.A.call({'xi': self.vars['xi']})['A'].shape)
 
-    def disc_dyn_mpc(self, h, opt_pars):
+    def disc_dyn_mpc(self, h, opt_pars, mode=None):
+        '''Add if loop: if mode is contact force the prediction model with parameter for cartesian force estimates from filter '''
         #par = self.mpc_params  # parameters for mpc problem
         N_p = 3  # dimensions of impedance model
         nq = self.nq
@@ -186,6 +188,7 @@ class Robot():
         tau_i = -self.contact.get_contact_torque(q)  # get estimated contact torques
         jac = self.jac(q)    # jacobian
         p_inv_jac = self.jacpinv(q)  # jacobian pseudoinverse
+        #print(p_inv_jac.shape)
         F_ext = p_inv_jac @ tau_i   # estimated external contact forces in cartesian space
         #print(stiff_matrix.shape)
         x, dx = self.get_tcp_motion(q, dq)

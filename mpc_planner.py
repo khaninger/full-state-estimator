@@ -14,6 +14,7 @@ class MpcPlanner:
         self.robots = RobotDict("config_files/franka.yaml", ["config_files/contact.yaml", "config_files/free_space.yaml"], {}).param_dict
         self.nx = self.robots['free'].nx
         self.nq = self.robots['free'].nq
+        self.pinv_jac = self.robots['free'].jacpinv
         self.N_p = self.mpc_params['N_p']  # dimensions of impedance
         self.constraint_slack = self.mpc_params['constraint_slack']
         self.modes = self.robots.keys()
@@ -119,7 +120,7 @@ class MpcPlanner:
                                                des_pose=self.pars['des_pose'])
 
             self.add_continuity_constraints(dyn_next['xi_next'], self.vars['q_' + mode])
-            #self.add_max_force_constraint(self.robots[mode].force_sym(dyn_next['xi_next'][:self.nq, -1]))
+            self.add_max_force_constraint(self.robots[mode].force_sym(dyn_next['xi_next'][:self.nq, -1]), dyn_next['xi_next'][:self.nq, 0])
             #print(len(self.lbg))
             #print(self.robots[mode].force_sym(self.vars['q_' + mode][:self.nq, :]).shape)
             J += self.pars['belief_' + mode] * ca.sum2(dyn_next['cost'])
@@ -146,12 +147,15 @@ class MpcPlanner:
         #self.lbg += [-self.mpc_params['delta_K_max']] * self.N_p
         #self.ubg += [self.mpc_params['delta_K_max']] * self.N_p
 
-    def add_max_force_constraint(self, sym_force):
+    def add_max_force_constraint(self, tau_ext, q):
         H = self.H
-        #print(sym_force.shape)
-        self.g += [ca.reshape(sym_force, 1, 1)]
-        self.lbg += [-3000] * 1
-        self.ubg += [100000000000] * 1
+        p_inv_jac = self.pinv_jac(q)
+        #print(p_inv_jac.shape)
+        F_ext = p_inv_jac @ tau_ext
+        #print(ca.norm_2(F_ext))
+        self.g += [ca.reshape(ca.norm_2(F_ext), 1, 1)]
+        self.lbg += [-30] * 1
+        self.ubg += [30] * 1
 
 
 
@@ -173,8 +177,6 @@ class MpcPlanner:
         ub['imp_stiff'] = self.mpc_params['K_max']
 
         return ub, lb
-
-
 
 
 

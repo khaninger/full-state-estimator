@@ -10,6 +10,7 @@ class Contact():
         self.pars = {}         # all contact parameters
         self.np = 0            # dim of symbolic params
 
+
     def build_vars(self, par, est_pars):
         xi_init = []
         cov_init_vec = []
@@ -55,8 +56,8 @@ class Contact():
                 F_i = -ca.DM(par[contact+'_stiff']).T@(x_i-par[contact+'_rest'])
             else:
                 F_i = -par[contact+'_stiff'].T@(x_i-par[contact+'_rest'])
-            res_dict[contact+'_pt'] = x_i
-            res_dict[contact+'_disp'] = disp_i
+            res_dict[contact + '_pt'] = x_i
+            res_dict[contact + '_disp'] = disp_i
             res_dict[contact+'_force'] = F_i
             self.torques[contact] = J_i.T@F_i
             self.forces[contact] = F_i
@@ -64,7 +65,7 @@ class Contact():
         fn_dict.update(res_dict)
         new_dic = {}
         new_dic['q'] = q
-        new_dic['F_ext'] = self.get_contact_force(fn_dict['q'])
+        new_dic['F_ext'] = self.get_contact_torque(fn_dict['q'])
         self.contact_info = ca.Function(contact+'_info', fn_dict,
                                         ['q', *self.est_pars.keys(), *opt_pars.keys()],
                                         [*res_dict.keys()])
@@ -82,6 +83,7 @@ class Contact():
         for contact in self.contacts:
             force += self.forces[contact]
         return force
+
             
     def get_statedict(self, q, dq, sym_pars_vec):
         d = {'q':q}

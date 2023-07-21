@@ -48,7 +48,7 @@ def build_step_fn(robot):
     #print(likelihood.shape)
     fn_dict = {'tau':tau_meas, 'mu':mu, 'cov':cov, 'q_meas':q_meas,
                'mu_next':mu_next_corr, 'cov_next':cov_next_corr, 'y_hat': y, 'S_hat': S_hat,
-               'likelihood': likelihood, 'A': A, 'C': C, 'cov_next_pre': cov_next, 'Q': Q, 'tau_ext': tau_i, 'y_meas': y_meas, 'F_ext': F_i}
+               'likelihood': log_likelihood, 'A': A, 'C': C, 'cov_next_pre': cov_next, 'Q': Q, 'tau_ext': tau_i, 'y_meas': y_meas, 'F_ext': F_i}
     step_fn = ca.Function('ekf_step', fn_dict,
                           ['tau', 'mu', 'cov', 'q_meas'], # inputs to casadi function
                           ['mu_next', 'cov_next', 'S_hat', 'y_hat', 'likelihood', 'A', 'C', 'cov_next_pre', 'Q', 'tau_ext', 'tau_g', 'y_meas', 'F_ext'])   # outputs of casadi function
