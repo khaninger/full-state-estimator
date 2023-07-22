@@ -34,6 +34,7 @@ class MpcPlanner:
 
 
 
+
     def iCEM_warmstart(self, params):
         mu = self.mu
         std = self.std
@@ -67,6 +68,8 @@ class MpcPlanner:
 
         # warm start nlp with iCEM
         best_traj, best_input = self.iCEM_warmstart(params_icem)
+        #print(best_traj[:self.nq, :])
+
 
         self.vars.set_x0('q_free', best_traj)
         self.vars.set_x0('q_contact', best_traj)
@@ -106,6 +109,7 @@ class MpcPlanner:
         vars0['imp_rest'] = np.zeros((N_p, self.H))       # initialize control action
         for m in self.modes:
             vars0['q_' + m] = np.zeros((nx, self.H))  # joint trajectory relative to tcp
+            #vars0['force_' + m] = np.zeros((N_p, self.H))
         ub, lb = self.build_dec_var_constraints()
         # turn the decision variables into a decision_var object
         self.vars = decision_var_set(x0=vars0, ub=ub, lb=lb, symb_type=ca.SX.sym)
@@ -120,7 +124,10 @@ class MpcPlanner:
                                                des_pose=self.pars['des_pose'])
 
             self.add_continuity_constraints(dyn_next['xi_next'], self.vars['q_' + mode])
-            self.add_max_force_constraint(self.robots[mode].force_sym(dyn_next['xi_next'][:self.nq, -1]), dyn_next['xi_next'][:self.nq, 0])
+            #self.add_max_force_constraint(self.robots[mode].force_sym(dyn_next['xi_next'][:self.nq, -1]), dyn_next['xi_next'][:self.nq, 0])
+            #print(dyn_next['F_ext'].shape)
+
+            #self.vars.set_x0('force_'+mode, dyn_next['F_ext'])
             #print(len(self.lbg))
             #print(self.robots[mode].force_sym(self.vars['q_' + mode][:self.nq, :]).shape)
             J += self.pars['belief_' + mode] * ca.sum2(dyn_next['cost'])

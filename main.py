@@ -162,6 +162,8 @@ class ros_observer():
         # MPC calc
         # Build parameters dictionary for the MPC problem
         params_mpc = self.rob_state
+        a = self.observer.get_statedict()[1]['list_particles']
+        #print(a)
         params_mpc.update(self.observer.get_statedict()[0])
         params_icem = self.par_icem
         params_icem.update(self.observer.get_statedict()[1])
