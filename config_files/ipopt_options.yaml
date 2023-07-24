@@ -9,14 +9,14 @@ ipopt.expect_infeasible_problem: 'no'
 ipopt.expect_infeasible_problem_ctol: 0.0001
 ipopt.expect_infeasible_problem_ytol: 100000000.0
 ipopt.fixed_variable_treatment: 'make_constraint'
-ipopt.linear_solver: 'MA86' #'MUMPS'
+ipopt.linear_solver: 'MUMPS' #'MUMPS'
 ipopt.max_cpu_time: 1000000.0
-ipopt.max_iter: 20
+ipopt.max_iter: 50
 ipopt.mu_init: 0.01
 ipopt.mu_oracle: probing
 ipopt.mu_strategy: adaptive
 ipopt.print_frequency_iter: 1
-ipopt.print_level: 5   # number of levels for optimization results
+ipopt.print_level: 0   # number of levels for optimization results
 ipopt.print_options_documentation: 'no'
 ipopt.print_timing_statistics: 'yes'
 ipopt.print_user_options: 'no'

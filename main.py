@@ -40,8 +40,8 @@ class ros_observer():
         self.F_pub = rospy.Publisher('est_force', JointState, queue_size=1)    # publisher for estimated external forces
         self.x_tcp_pub = rospy.Publisher('tcp_pos', JointState, queue_size=1)  # publisher for tcp cartesian motion
         #self.imp_rest_pub = rospy.Publisher('cartesian_impedance_example_controller/equilibrium_pose', PoseStamped, queue_size=1)  # impedance rest point publisher
-        #self.imp_rest_pub = rospy.Publisher('cartesian_impedance_example_controller/equilibrium_pose', PoseStamped, queue_size=1)  # impedance rest point publisher
-        self.imp_rest_pub = rospy.Publisher('mpc_equilibrium_pose', PoseStamped, queue_size=1)  # impedance rest point publisher
+        self.imp_rest_pub = rospy.Publisher('cartesian_impedance_example_controller/equilibrium_pose', PoseStamped, queue_size=1)  # impedance rest point publisher
+        #self.imp_rest_pub = rospy.Publisher('mpc_equilibrium_pose', PoseStamped, queue_size=1)  # impedance rest point publisher
 
         self.robots = RobotDict("config_files/franka.yaml", ["config_files/contact.yaml", "config_files/free_space.yaml"], est_pars).param_dict
         self.ny = self.robots['free'].ny
@@ -66,7 +66,7 @@ class ros_observer():
         self.mpc = MpcPlanner(mpc_params=self.mpc_params,
                               icem_params=self.icem_params,
                               ipopt_options=self.ipopt_options)
-        #self.par_client = dynamic_reconfigure.client.Client( "/cartesian_impedance_example_controller/dynamic_reconfigure_compliance_param_node")
+        self.par_client = dynamic_reconfigure.client.Client( "/cartesian_impedance_example_controller/dynamic_reconfigure_compliance_param_node")
         self.init_orientation = self.tf_buffer.lookup_transform('panda_link0', 'panda_EE', rospy.Time(0),
                                                                 rospy.Duration(1)).transform.rotation
 
@@ -148,13 +148,13 @@ class ros_observer():
         self.rob_state['pose'] = msg_to_state(pose_msg)
         #print(self.rob_state['pose'])
 
-        #imp_pars = self.par_client.get_configuration()   # set impedance stiffness values
-        #self.rob_state['imp_stiff'] = np.array((imp_pars['translational_stiffness_x'],
-                                                #imp_pars['translational_stiffness_y'],
-                                                #imp_pars['translational_stiffness_z']))
-        #self.icem_params['imp_stiff'] = np.array((imp_pars['translational_stiffness_x'],
-                                                  #imp_pars['translational_stiffness_y'],
-                                                  #imp_pars['translational_stiffness_z']))
+        imp_pars = self.par_client.get_configuration()   # set impedance stiffness values
+        self.rob_state['imp_stiff'] = np.array((imp_pars['translational_stiffness_x'],
+                                                imp_pars['translational_stiffness_y'],
+                                                imp_pars['translational_stiffness_z']))
+        self.icem_params['imp_stiff'] = np.array((imp_pars['translational_stiffness_x'],
+                                                  imp_pars['translational_stiffness_y'],
+                                                  imp_pars['translational_stiffness_z']))
 
     def control(self):
         if any(el is None for el in self.rob_state.values()) or rospy.is_shutdown(): return
@@ -166,11 +166,13 @@ class ros_observer():
         #print(a)
         params_mpc.update(self.observer.get_statedict()[0])
         params_icem = self.par_icem
+        tcp_pos = self.x_tcp
+        #print(self.icem_params)
         params_icem.update(self.observer.get_statedict()[1])
 
 
         start = time.time()
-        self.mpc_state = self.mpc.solve(params_mpc, params_icem)
+        self.mpc_state = self.mpc.solve(params_mpc, params_icem, tcp_pos)
         #print(self.mpc_state['q_free'])
         self.timelist.append(time.time() - start)
         self.publish_imp_rest()  # publish impedance optimized rest pose --> to be sent to franka impedance interface

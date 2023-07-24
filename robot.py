@@ -203,7 +203,7 @@ class Robot():
         dq_next = dq + h * delta
         q_next = q + h * dq_next
         dyn_mpc_dict['xi_next'] = ca.vertcat(q_next, dq_next, dyn_mpc_dict['xi'][nq2:])
-        dyn_mpc_dict['cost'] = 0.9*ca.sumsqr(des_pose - x[0]) + 0.1*ca.sumsqr(imp_rest - x[0])  # write 1-step cost --> would be mapped across planning horizon in MPC module
+        dyn_mpc_dict['cost'] = 0.999*ca.sumsqr(des_pose - x[0]) + 0.001*ca.sumsqr(imp_rest - x[0])  # write 1-step cost --> would be mapped across planning horizon in MPC module
         dyn_mpc_dict['F_ext'] = F_ext
         self.dyn_mpc = ca.Function('disc_dyn', dyn_mpc_dict,
                                     ['xi', 'imp_rest', 'imp_stiff', 'des_pose', *opt_pars.keys()],
