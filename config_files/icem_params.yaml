@@ -6,5 +6,5 @@ H: 6           # planning horizon
 
 u_min: -1   # lower bound on actions
 u_max: 1    # upper bound on actions
-num_iter: 10  # number of iterations for iCEM
-elite_num: 4    # number of elite samples
+num_iter: 20  # number of iterations for iCEM
+elite_num: 6    # number of elite samples

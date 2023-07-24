@@ -81,7 +81,7 @@ class HybridParticleFilter:
             self.y_hat[i] = res['y_hat']   # predicted measurements
             particle.weight = res['likelihood']
             self.y_meas[i] = res['y_meas']
-            print(particle.sampled_mode, res['F_ext'])
+            #print(particle.sampled_mode, res['F_ext'])
             #if np.linalg.norm(res['F_ext'])>200:
                 #print("force > 200")
             #print(particle.sampled_mode, np.linalg.norm(res['F_ext'])>200)

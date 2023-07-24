@@ -124,7 +124,7 @@ class MpcPlanner:
                                                des_pose=self.pars['des_pose'])
 
             self.add_continuity_constraints(dyn_next['xi_next'], self.vars['q_' + mode])
-            #self.add_max_force_constraint(self.robots[mode].force_sym(dyn_next['xi_next'][:self.nq, -1]), dyn_next['xi_next'][:self.nq, 0])
+            self.add_max_force_constraint(self.robots[mode].force_sym(dyn_next['xi_next'][:self.nq, -1]), dyn_next['xi_next'][:self.nq, 0])
             #print(dyn_next['F_ext'].shape)
 
             #self.vars.set_x0('force_'+mode, dyn_next['F_ext'])
@@ -159,10 +159,12 @@ class MpcPlanner:
         p_inv_jac = self.pinv_jac(q)
         #print(p_inv_jac.shape)
         F_ext = p_inv_jac @ tau_ext
+        #F_ext_contact =
+
         #print(ca.norm_2(F_ext))
         self.g += [ca.reshape(ca.norm_2(F_ext), 1, 1)]
         self.lbg += [-30] * 1
-        self.ubg += [30] * 1
+        self.ubg += [np.inf] * 1
 
 
 
