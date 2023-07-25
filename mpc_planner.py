@@ -15,6 +15,7 @@ class MpcPlanner:
         self.nx = self.robots['free'].nx
         self.nq = self.robots['free'].nq
         self.pinv_jac = self.robots['free'].jacpinv
+
         self.N_p = self.mpc_params['N_p']  # dimensions of impedance
         self.constraint_slack = self.mpc_params['constraint_slack']
         self.modes = self.robots.keys()
@@ -47,10 +48,14 @@ class MpcPlanner:
             x0 = params['list_particles']  # list of tuples with joint states and sampled mode for every particle
             des_pose = params['des_pose']
             imp_stiff = params['imp_stiff']
+            weights = params['weights']
+            sum_weights = np.sum(weights)
+            normalized_weights = weights/sum_weights
             rollout = np.zeros((self.num_samples, self.nx, self.H))
             cost = np.zeros(self.num_samples)
             for j in range(self.num_samples):
                 cost[j], rollout[j] = self.rollouts[x0[j][0]](x0[j][1], samples[j], imp_stiff, des_pose)
+                cost[j] *= (1/normalized_weights[j])   # normalize cost according to particle weight
 
             elite_indexes = np.argsort(cost)[:self.num_elites]
             elite_samples = samples[elite_indexes]
@@ -72,7 +77,7 @@ class MpcPlanner:
         # warm start nlp with iCEM
         best_traj, best_input = self.iCEM_warmstart(params_icem, tcp_pos)
         #print(best_traj[:self.nq, :])
-        #print(best_input)
+        print(best_input)
 
 
         self.vars.set_x0('q_free', best_traj)
@@ -87,7 +92,17 @@ class MpcPlanner:
         self.args['lam_g0'] = sol['lam_g']
 
         self.vars.set_results(sol['x'])
+        #print(self.get_tcp(self.vars['q_free'][:self.nq, :], self.vars['q_free'][-self.nq:, :]))
+        #print(self.vars['q_contact'][:, :])
+
+
+
+        #print(self.vars['q_contact'][:self.nq, :])
+        #for mode in self.modes:
+            #print(self.cartesian_force(self.robots[mode].force_sym(self.vars['q_' + mode][:self.nq, 0]), self.vars['q_' + mode][:self.nq, 0]))
+            #print(self.robots[mode].force_sym(self.vars['q_' + mode][:self.nq, :]))
         # update mean of sampling distribution
+        #print(self.vars['imp_rest'])
         self.mu = self.vars['imp_rest']
         self.std = np.ones(self.dim_samples)  # re-initialize std to be ones at each time-step
 
@@ -126,9 +141,9 @@ class MpcPlanner:
                                                imp_rest=self.vars['imp_rest'],
                                                imp_stiff=imp_stiff,
                                                des_pose=self.pars['des_pose'])
-
             self.add_continuity_constraints(dyn_next['xi_next'], self.vars['q_' + mode])
-            #self.add_max_force_constraint(self.robots[mode].force_sym(dyn_next['xi_next'][:self.nq, -1]), dyn_next['xi_next'][:self.nq, 0])
+            #self.add_max_force_constraint(self.robots[mode].force_sym(dyn_next['xi_next'][:self.nq, -1]), dyn_next['xi_next'][:self.nq, -1])
+            self.add_max_force_constraint(self.robots[mode].force_sym(self.vars['q_' + mode][:self.nq, 0]), self.vars['q_' + mode][:self.nq, 0])
             #print(dyn_next['F_ext'].shape)
 
             #self.vars.set_x0('force_'+mode, dyn_next['F_ext'])
@@ -163,11 +178,12 @@ class MpcPlanner:
         p_inv_jac = self.pinv_jac(q)
         #print(p_inv_jac.shape)
         F_ext = p_inv_jac @ tau_ext
-        #F_ext_contact =
+
+
 
         #print(ca.norm_2(F_ext))
-        self.g += [ca.reshape(ca.norm_2(F_ext), 1, 1)]
-        self.lbg += [-100] * 1
+        self.g += [ca.reshape(F_ext[2], 1, 1)]
+        self.lbg += [-30] * 1
         self.ubg += [np.inf] * 1
 
 
@@ -184,12 +200,23 @@ class MpcPlanner:
     def build_dec_var_constraints(self):
         ub = {}
         lb = {}
-        lb['des_pose'] = -self.mpc_params['delta_xd_max']
-        ub['des_pose'] = self.mpc_params['delta_xd_max']
+        lb['imp_rest'] = -self.mpc_params['delta_xd_max']
+        ub['imp_rest'] = self.mpc_params['delta_xd_max']
         lb['imp_stiff'] = self.mpc_params['K_min']
         ub['imp_stiff'] = self.mpc_params['K_max']
 
         return ub, lb
+
+    def cartesian_force(self, tau_ext, q):
+        H = self.H
+        p_inv_jac = self.pinv_jac(q)
+        F_ext = p_inv_jac @ tau_ext
+        return F_ext
+
+    def get_tcp(self, q, dq):
+        x_tcp = self.robots['free'].get_tcp_motion(q=q, dq=dq)[0]
+        x_tcp_pos = x_tcp[0]
+        return x_tcp_pos
 
 
 

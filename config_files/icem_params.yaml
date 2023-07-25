@@ -4,7 +4,7 @@ alpha: 0.2     # tuning parameter for distribution fitting
 N_p: 3         # dimension of impedance
 H: 6           # planning horizon
 
-u_min:  -0.3  # lower bound on actions
-u_max: 0.3    # upper bound on actions
+u_min:  -0.8  # lower bound on actions
+u_max: 0.8    # upper bound on actions
 num_iter: 20  # number of iterations for iCEM
 elite_num: 6    # number of elite samples

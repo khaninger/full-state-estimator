@@ -65,7 +65,7 @@ class Contact():
         fn_dict.update(res_dict)
         new_dic = {}
         new_dic['q'] = q
-        new_dic['F_ext'] = self.get_contact_torque(fn_dict['q'])
+        new_dic['F_ext'] = -self.get_contact_torque(fn_dict['q'])
         self.contact_info = ca.Function(contact+'_info', fn_dict,
                                         ['q', *self.est_pars.keys(), *opt_pars.keys()],
                                         [*res_dict.keys()])

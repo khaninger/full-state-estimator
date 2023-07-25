@@ -87,6 +87,7 @@ class ros_observer():
             #print(self.x['mu'][:self.nq])
             #print(self.x['mu'][-self.nq:])
             #print(self.x['F_ext'])
+            #print(self.x['weights'].shape)
             #print(self.x['est_force'])
             #print(np.all(np.linalg.det(self.x['cov'])>0))
             #print(self.x['est_force'])
@@ -162,7 +163,7 @@ class ros_observer():
         # MPC calc
         # Build parameters dictionary for the MPC problem
         params_mpc = self.rob_state
-        a = self.observer.get_statedict()[1]['list_particles']
+        #a = self.observer.get_statedict()[1]['list_particles']
         #print(a)
         params_mpc.update(self.observer.get_statedict()[0])
         params_icem = self.par_icem

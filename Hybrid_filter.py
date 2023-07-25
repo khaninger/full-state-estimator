@@ -31,7 +31,7 @@ class HybridParticleFilter:
         self.N_eff = 0
         self.x = {'mu': robot['free'].xi_init, 'cov': robot['free'].cov_init,
                   'belief_free': 0.6, 'belief_contact': 0.4}
-        self.belief_init = np.array([self.x['belief_contact'], self.x['belief_free']])
+        self.belief_init = np.array([self.x['belief_contact'], self.x['belief_free']])   # be consistent with this ordering!!!!!!!!!!!!!!
         #print(self.x['mu'])
         self.proc_noise = robot['free'].proc_noise
         self.meas_noise = robot['free'].meas_noise
@@ -128,9 +128,9 @@ class HybridParticleFilter:
                 #particle.weight = sys.float_info.epsilon
 
             if particle.sampled_mode == 'free':
-                particle.weight += np.log(particle.mode[0])
-            elif particle.sampled_mode == 'contact':
                 particle.weight += np.log(particle.mode[1])
+            elif particle.sampled_mode == 'contact':
+                particle.weight += np.log(particle.mode[0])
             summation += np.exp(particle.weight)
         self.weightsum = 0
         for particle in self.particles:
@@ -145,6 +145,7 @@ class HybridParticleFilter:
         #print(self.x['belief_free'])
         for particle in self.particles:
             particle.mode_prev = np.array([self.x['belief_contact'], self.x['belief_free']]).ravel()
+            #print(particle.mode_prev)
 
 
     def estimate_state(self):
@@ -172,7 +173,7 @@ class HybridParticleFilter:
             #print(self.y_hat[i][-self.nq:])
             #print(particle.weight)
             weights[i] = np.exp(particle.weight)
-            vel[i ,:] = particle.mu[-self.nq:]
+            vel[i, :] = particle.mu[-self.nq:]
             cov[i] = particle.Sigma
         #print(weights.shape)
         self.x['est_force'] = np.average(est_force, weights=weights, axis=0)
@@ -182,6 +183,7 @@ class HybridParticleFilter:
         self.x["cov"] = np.average(cov, weights=weights, axis=0)
         self.x['y_meas'] = self.y_meas[0][-self.nq:]
         self.x['list_particles'] = list_tuples
+        self.x['weights'] = weights
 
         #print(self.x["cov"].shape)
 
@@ -225,6 +227,7 @@ class HybridParticleFilter:
         icem_param = {}
         state_dict['init_state'] = self.x['mu']
         icem_param['list_particles'] = self.x['list_particles']
+        icem_param['weights'] = self.x['weights']
         state_dict['belief_free'] = self.x['belief_free']
         state_dict['belief_contact'] = self.x['belief_contact']
         return state_dict, icem_param

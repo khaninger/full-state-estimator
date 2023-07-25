@@ -4,7 +4,7 @@
 vel_cost: 0    # Velocity cost
 
 delta_xd_cost: 0.0001  # cost on imp stiffness displacement
-delta_xd_max: 0.15 # maximum displacement of imp spring
+delta_xd_max: 0.8 # maximum displacement of imp spring
 
 
 delta_K_max: 10
@@ -14,14 +14,14 @@ K_max: 400
 K_cost: 0.000
 
 imp_stiff:
-  - 50
-  - 50
-  - 50
+  - 152
+  - 152
+  - 152
 #### desired pose in cartesian space --> desired point
 des_pose:
-  - 0.38983
-  - -0.42948
-  - 0.06099
+  - 0.3906
+  - 0.35775
+  - 0.33304
 
 
 
@@ -33,7 +33,7 @@ enable_rotation: false
 
 mpc_pts: 13
 N_p: 3                       # dimension of impedance
-dt: 0.01                      # sampling time
+dt: 0.05                      # sampling time
 H: 6                        # planning horizon
 constraint_slack: 0.0
 bound_relax_factor: 1e-6
