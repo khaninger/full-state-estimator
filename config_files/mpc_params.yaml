@@ -20,8 +20,8 @@ imp_stiff:
 #### desired pose in cartesian space --> desired point
 des_pose:
   - 0.3906
-  - 0.35775
-  - 0.33304
+  - -0.35775
+  - -0.33304
 
 
 

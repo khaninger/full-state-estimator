@@ -75,17 +75,18 @@ class MpcPlanner:
         self.args['p'] = self.pars.update(params_mpc)  # update parameters for the solver
 
         # warm start nlp with iCEM
-        best_traj, best_input = self.iCEM_warmstart(params_icem, tcp_pos)
+        #best_traj, best_input = self.iCEM_warmstart(params_icem, tcp_pos)
         #print(best_traj[:self.nq, :])
-        print(best_input)
+        #print(best_input)
 
 
-        self.vars.set_x0('q_free', best_traj)
-        self.vars.set_x0('q_contact', best_traj)
-        self.vars.set_x0('imp_rest', best_input)
-        self.args['x0'] = self.vars.get_x0()
+        #self.vars.set_x0('q_free', best_traj)
+        #self.vars.set_x0('q_contact', best_traj)
+        #self.vars.set_x0('imp_rest', best_input)
+        #self.args['x0'] = self.vars.get_x0()
         #print(self.args['x0'].shape)
         sol = self.solver(**self.args)
+        self.args['x0'] = sol['x']
 
         #self.args['x0'] = sol['x']
         self.args['lam_x0'] = sol['lam_x']
@@ -103,8 +104,8 @@ class MpcPlanner:
             #print(self.robots[mode].force_sym(self.vars['q_' + mode][:self.nq, :]))
         # update mean of sampling distribution
         #print(self.vars['imp_rest'])
-        self.mu = self.vars['imp_rest']
-        self.std = np.ones(self.dim_samples)  # re-initialize std to be ones at each time-step
+        #self.mu = self.vars['imp_rest']
+        #self.std = np.ones(self.dim_samples)  # re-initialize std to be ones at each time-step
 
         return self.vars.filter()    # return dictionary of decision variables
 

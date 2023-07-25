@@ -1,6 +1,6 @@
 beta: 0.02     # noise tuning parameter
 num_samples: 80   # number of samples for action trajectories --> same of number of filter particles
-alpha: 0.2     # tuning parameter for distribution fitting
+alpha: 0.02     # tuning parameter for distribution fitting
 N_p: 3         # dimension of impedance
 H: 6           # planning horizon
 
