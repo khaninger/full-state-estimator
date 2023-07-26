@@ -14,14 +14,14 @@ K_max: 400
 K_cost: 0.000
 
 imp_stiff:
-  - 152
-  - 152
+  - 28
+  - 28
   - 152
 #### desired pose in cartesian space --> desired point
 des_pose:
-  - 0.3906
-  - -0.35775
-  - -0.33304
+  - 0.44456
+  - -0.36173
+  - -0.3257
 
 
 

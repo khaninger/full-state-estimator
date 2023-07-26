@@ -22,7 +22,7 @@ class HybridParticleFilter:
 
 
         self.particles = []
-        self.num_particles = 80
+        self.num_particles = 40
         self.trans_matrix = np.array([[0.8, 0.2], [0.2, 0.8]])
         #self.belief_init = np.array([0.8, 0.2])
         #self.belief_free = 0.8
@@ -81,6 +81,10 @@ class HybridParticleFilter:
             self.y_hat[i] = res['y_hat']   # predicted measurements
             particle.weight = res['likelihood']
             self.y_meas[i] = res['y_meas']
+            #print('F_meas')
+            #print(res['F_meas'])
+            #print('F_est')
+            #print(res['F_ext'], particle.sampled_mode)
             #print(particle.sampled_mode, res['F_ext'])
             #if np.linalg.norm(res['F_ext'])>200:
                 #print("force > 200")

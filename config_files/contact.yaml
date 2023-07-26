@@ -2,17 +2,21 @@ model: contact
 contact_models:
   - contact_1
 contact_1_pos:
-  - 0.013
-  - 0.018
   - 0.0
+  - 0.0
+  - 0.19
 contact_1_stiff:
   - 0
   - 0
   - 43465.1
+  #- 4782  purple
+  #- 2700 #yellow
+  #- 43465.1 #aluminum
 contact_1_rest:
-  - 0.415
-  - -0.365
-  - 0.2169
+  - 0.44457
+  - -0.41089
+  - 0.07401
+  #- 0.2881 #yellow
 contact_1_upper_bound:
   - 20
 contact_1_lower_bound:

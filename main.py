@@ -66,7 +66,7 @@ class ros_observer():
         self.mpc = MpcPlanner(mpc_params=self.mpc_params,
                               icem_params=self.icem_params,
                               ipopt_options=self.ipopt_options)
-        self.par_client = dynamic_reconfigure.client.Client( "/cartesian_impedance_example_controller/dynamic_reconfigure_compliance_param_node")
+        #self.par_client = dynamic_reconfigure.client.Client( "/cartesian_impedance_example_controller/dynamic_reconfigure_compliance_param_node")
         self.init_orientation = self.tf_buffer.lookup_transform('panda_link0', 'panda_EE', rospy.Time(0),
                                                                 rospy.Duration(1)).transform.rotation
 
@@ -149,13 +149,13 @@ class ros_observer():
         self.rob_state['pose'] = msg_to_state(pose_msg)
         #print(self.rob_state['pose'])
 
-        imp_pars = self.par_client.get_configuration()   # set impedance stiffness values
-        self.rob_state['imp_stiff'] = np.array((imp_pars['translational_stiffness_x'],
-                                                imp_pars['translational_stiffness_y'],
-                                                imp_pars['translational_stiffness_z']))
-        self.icem_params['imp_stiff'] = np.array((imp_pars['translational_stiffness_x'],
-                                                  imp_pars['translational_stiffness_y'],
-                                                  imp_pars['translational_stiffness_z']))
+        #imp_pars = self.par_client.get_configuration()   # set impedance stiffness values
+        #self.rob_state['imp_stiff'] = np.array((imp_pars['translational_stiffness_x'],
+                                                #imp_pars['translational_stiffness_y'],
+                                                #imp_pars['translational_stiffness_z']))
+        #self.icem_params['imp_stiff'] = np.array((imp_pars['translational_stiffness_x'],
+                                                  #imp_pars['translational_stiffness_y'],
+                                                  #imp_pars['translational_stiffness_z']))
 
     def control(self):
         if any(el is None for el in self.rob_state.values()) or rospy.is_shutdown(): return

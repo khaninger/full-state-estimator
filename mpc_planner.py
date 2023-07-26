@@ -24,7 +24,7 @@ class MpcPlanner:
         self.beta = self.icem_params['beta']
         self.num_samples = self.icem_params['num_samples']
         self.alpha = self.icem_params['alpha']
-        self.dim_samples = (self.N_p, self.H)  # (nq,H)
+        self.dim_samples = (self.N_p, self.H)  # (np,H)
         self.mu = np.zeros(self.dim_samples)
         self.std = np.zeros(self.dim_samples)
         self.u_min = self.icem_params['u_min']
@@ -75,18 +75,18 @@ class MpcPlanner:
         self.args['p'] = self.pars.update(params_mpc)  # update parameters for the solver
 
         # warm start nlp with iCEM
-        #best_traj, best_input = self.iCEM_warmstart(params_icem, tcp_pos)
+        best_traj, best_input = self.iCEM_warmstart(params_icem, tcp_pos)
         #print(best_traj[:self.nq, :])
         #print(best_input)
 
 
-        #self.vars.set_x0('q_free', best_traj)
-        #self.vars.set_x0('q_contact', best_traj)
-        #self.vars.set_x0('imp_rest', best_input)
-        #self.args['x0'] = self.vars.get_x0()
+        self.vars.set_x0('q_free', best_traj)
+        self.vars.set_x0('q_contact', best_traj)
+        self.vars.set_x0('imp_rest', best_input)
+        self.args['x0'] = self.vars.get_x0()
         #print(self.args['x0'].shape)
         sol = self.solver(**self.args)
-        self.args['x0'] = sol['x']
+        #self.args['x0'] = sol['x']
 
         #self.args['x0'] = sol['x']
         self.args['lam_x0'] = sol['lam_x']
@@ -104,8 +104,8 @@ class MpcPlanner:
             #print(self.robots[mode].force_sym(self.vars['q_' + mode][:self.nq, :]))
         # update mean of sampling distribution
         #print(self.vars['imp_rest'])
-        #self.mu = self.vars['imp_rest']
-        #self.std = np.ones(self.dim_samples)  # re-initialize std to be ones at each time-step
+        self.mu = self.vars['imp_rest']
+        self.std = np.ones(self.dim_samples)  # re-initialize std to be ones at each time-step
 
         return self.vars.filter()    # return dictionary of decision variables
 
@@ -143,8 +143,8 @@ class MpcPlanner:
                                                imp_stiff=imp_stiff,
                                                des_pose=self.pars['des_pose'])
             self.add_continuity_constraints(dyn_next['xi_next'], self.vars['q_' + mode])
-            #self.add_max_force_constraint(self.robots[mode].force_sym(dyn_next['xi_next'][:self.nq, -1]), dyn_next['xi_next'][:self.nq, -1])
-            self.add_max_force_constraint(self.robots[mode].force_sym(self.vars['q_' + mode][:self.nq, 0]), self.vars['q_' + mode][:self.nq, 0])
+
+            #self.add_max_force_constraint(self.robots[mode].force_sym(self.vars['q_' + mode][:self.nq, 0]), self.vars['q_' + mode][:self.nq, 0])
             #print(dyn_next['F_ext'].shape)
 
             #self.vars.set_x0('force_'+mode, dyn_next['F_ext'])

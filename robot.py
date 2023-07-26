@@ -203,7 +203,7 @@ class Robot():
         dq_next = dq + h * delta
         q_next = q + h * dq_next
         dyn_mpc_dict['xi_next'] = ca.vertcat(q_next, dq_next, dyn_mpc_dict['xi'][nq2:])
-        dyn_mpc_dict['cost'] = 0.99*ca.sumsqr(des_pose - x[0]) + 0.0025*ca.sumsqr(imp_rest - x[0])  # write 1-step cost --> would be mapped across planning horizon in MPC module
+        dyn_mpc_dict['cost'] = 0.99*ca.sumsqr(des_pose - x[0]) + 0.0025*ca.sumsqr(imp_rest - x[0]) + 0.00015*ca.sumsqr(dx) # write 1-step cost --> would be mapped across planning horizon in MPC module
         dyn_mpc_dict['F_ext'] = F_ext
         self.dyn_mpc = ca.Function('disc_dyn', dyn_mpc_dict,
                                     ['xi', 'imp_rest', 'imp_stiff', 'des_pose', *opt_pars.keys()],
@@ -240,7 +240,7 @@ class Robot():
         #par = self.mpc_params
 
         N_p = 3 # dimensions of impedance model
-        input_samples = ca.SX.sym('input_samples', N_p, 1)  # tensor for action trajectories --> impedance rest position
+        input_samples = ca.SX.sym('input_samples', N_p, H)  # tensor for action trajectories --> impedance rest position
         imp_stiff = ca.SX.sym('imp_stiff', N_p)  # imp stiff in TCP frame
         des_pose = ca.SX.sym('des_pose', N_p)  # desired pose
         xi = self.vars['xi']  # joint states
